@@ -1094,6 +1094,11 @@
         let stabilityCounter = 0;
         let lastPopulation = 0;
 
+        // Selection tool state
+        let selectionStart = null;
+        let selectionEnd = null;
+        let selectionData = null;
+
         // ============================================
         // INITIALIZATION
         // ============================================
@@ -1164,7 +1169,7 @@
             for (const [key, pattern] of Object.entries(patterns)) {
                 const item = document.createElement('div');
                 item.className = 'pattern-item';
-                item.onclick = () => selectPattern(key);
+                item.onclick = function() { selectPattern(key, this); };
 
                 const preview = document.createElement('div');
                 preview.className = 'pattern-preview';
@@ -1402,6 +1407,30 @@
 
                 ctx.globalAlpha = 1;
             }
+
+            // Draw selection rectangle when selecting
+            if (currentTool === 'select' && isDrawing && selectionStart) {
+                const mousePos = getGridPosition(lastMouseX, lastMouseY);
+                const minX = Math.min(selectionStart.x, mousePos.x);
+                const maxX = Math.max(selectionStart.x, mousePos.x);
+                const minY = Math.min(selectionStart.y, mousePos.y);
+                const maxY = Math.max(selectionStart.y, mousePos.y);
+
+                const screenX = minX * effectiveCellSize + panX;
+                const screenY = minY * effectiveCellSize + panY;
+                const width = (maxX - minX + 1) * effectiveCellSize;
+                const height = (maxY - minY + 1) * effectiveCellSize;
+
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.strokeRect(screenX, screenY, width, height);
+                ctx.setLineDash([]);
+
+                // Semi-transparent fill
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                ctx.fillRect(screenX, screenY, width, height);
+            }
         }
 
         function renderMinimap() {
@@ -1520,10 +1549,15 @@
             lastMouseX = mouseX;
             lastMouseY = mouseY;
 
-            if (currentTool === 'line' || currentTool === 'rect' || currentTool === 'circle') {
+            if (currentTool === 'line' || currentTool === 'rect' || currentTool === 'circle' || currentTool === 'select') {
                 const pos = getGridPosition(mouseX, mouseY);
                 shapeStartX = pos.x;
                 shapeStartY = pos.y;
+                if (currentTool === 'select') {
+                    selectionStart = pos;
+                    selectionEnd = null;
+                    selectionData = null;
+                }
             } else {
                 handleDraw(mouseX, mouseY);
             }
@@ -1551,6 +1585,11 @@
             if (isDrawing && (currentTool === 'line' || currentTool === 'rect' || currentTool === 'circle')) {
                 const pos = getGridPosition(lastMouseX, lastMouseY);
                 drawShape(shapeStartX, shapeStartY, pos.x, pos.y);
+            } else if (isDrawing && currentTool === 'select') {
+                const pos = getGridPosition(lastMouseX, lastMouseY);
+                selectionEnd = pos;
+                // Copy selected cells to clipboard format
+                copySelectionToClipboard();
             }
 
             isDrawing = false;
@@ -1826,12 +1865,14 @@
             });
         }
 
-        function selectPattern(key) {
+        function selectPattern(key, element) {
             selectedPattern = key;
             currentTool = 'stamp';
 
             document.querySelectorAll('.pattern-item').forEach(item => item.classList.remove('selected'));
-            event.currentTarget.classList.add('selected');
+            if (element) {
+                element.classList.add('selected');
+            }
 
             document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById('tool-stamp').classList.add('active');
@@ -2085,6 +2126,29 @@
             link.href = canvas.toDataURL('image/png');
             link.click();
             showNotification('Image saved');
+        }
+
+        function copySelectionToClipboard() {
+            if (!selectionStart || !selectionEnd) return;
+
+            const minX = Math.min(selectionStart.x, selectionEnd.x);
+            const maxX = Math.max(selectionStart.x, selectionEnd.x);
+            const minY = Math.min(selectionStart.y, selectionEnd.y);
+            const maxY = Math.max(selectionStart.y, selectionEnd.y);
+
+            let result = '';
+            for (let y = minY; y <= maxY; y++) {
+                for (let x = minX; x <= maxX; x++) {
+                    result += game.get(x, y) ? 'O' : '.';
+                }
+                result += '\n';
+            }
+
+            navigator.clipboard.writeText(result).then(() => {
+                showNotification('Selection copied to clipboard');
+            }).catch(() => {
+                showNotification('Could not copy to clipboard');
+            });
         }
 
         // ============================================

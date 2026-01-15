@@ -408,7 +408,7 @@
     <div id="easterEggNotif"></div>
 
     <div id="keyboard-hints">
-        <span>C</span> CRT | <span>H</span> Heat | <span>P</span> Predict | <span>T</span> Trail | <span>R</span> Reset | <span>SPACE</span> Chaos | <span>SHIFT+Click</span> Add Logo
+        <span>C</span> CRT | <span>H</span> Heat | <span>P</span> Predict | <span>T</span> Trail | <span>G</span> Glow | <span>S</span> Sound | <span>R</span> Reset | <span>SPACE</span> Chaos | <span>SHIFT+Click</span> Add Logo
     </div>
 
     <div id="controls">
@@ -494,6 +494,26 @@
     </div>
 
     <script>
+        // ============================================
+        // POLYFILLS FOR OLDER BROWSERS
+        // ============================================
+        if (!CanvasRenderingContext2D.prototype.roundRect) {
+            CanvasRenderingContext2D.prototype.roundRect = function(x, y, width, height, radii) {
+                const radius = typeof radii === 'number' ? radii : (radii && radii[0]) || 0;
+                this.moveTo(x + radius, y);
+                this.lineTo(x + width - radius, y);
+                this.arcTo(x + width, y, x + width, y + radius, radius);
+                this.lineTo(x + width, y + height - radius);
+                this.arcTo(x + width, y + height, x + width - radius, y + height, radius);
+                this.lineTo(x + radius, y + height);
+                this.arcTo(x, y + height, x, y + height - radius, radius);
+                this.lineTo(x, y + radius);
+                this.arcTo(x, y, x + radius, y, radius);
+                this.closePath();
+                return this;
+            };
+        }
+
         // ============================================
         // CANVAS SETUP
         // ============================================
@@ -1136,8 +1156,21 @@
                 ctx.fillText('BETAMAX', size.width * 0.4, size.height * 0.55);
             }
 
-            predictPath() {
+            predictPath(useCache = true) {
                 if (!document.getElementById('showPrediction').checked) return [];
+
+                // Check cache validity - recalculate every 10 frames or if position/velocity changed significantly
+                predictionCache.frameCounter++;
+                const positionChanged = Math.abs(this.x - predictionCache.lastX) > 1 ||
+                                        Math.abs(this.y - predictionCache.lastY) > 1;
+                const velocityChanged = Math.abs(this.vx - predictionCache.lastVx) > 0.1 ||
+                                        Math.abs(this.vy - predictionCache.lastVy) > 0.1;
+
+                if (useCache && predictionCache.path.length > 0 &&
+                    predictionCache.frameCounter < 10 &&
+                    !positionChanged && !velocityChanged) {
+                    return predictionCache.path;
+                }
 
                 const size = this.getSize();
                 const points = [];
@@ -1174,6 +1207,14 @@
                     }
                 }
 
+                // Update cache
+                predictionCache.path = points;
+                predictionCache.lastX = this.x;
+                predictionCache.lastY = this.y;
+                predictionCache.lastVx = this.vx;
+                predictionCache.lastVy = this.vy;
+                predictionCache.frameCounter = 0;
+
                 return points;
             }
         }
@@ -1194,6 +1235,16 @@
         let heatmapData = [];
         let showHeatmap = false;
         let crtEnabled = false;
+
+        // Prediction cache for performance optimization
+        let predictionCache = {
+            path: [],
+            lastX: 0,
+            lastY: 0,
+            lastVx: 0,
+            lastVy: 0,
+            frameCounter: 0
+        };
 
         // Easter egg system
         let easterEggProgress = 0;
@@ -1268,8 +1319,9 @@
             document.getElementById('cornerCount').textContent = stats.corners;
             updateCornerRate();
 
-            // MASSIVE particle explosion
-            for (let i = 0; i < 150; i++) {
+            // MASSIVE particle explosion (with limit to prevent performance issues)
+            const particlesToAdd = Math.min(150, 500 - particles.length);
+            for (let i = 0; i < particlesToAdd; i++) {
                 particles.push(new Particle(
                     x, y,
                     logoColors[Math.floor(Math.random() * logoColors.length)],

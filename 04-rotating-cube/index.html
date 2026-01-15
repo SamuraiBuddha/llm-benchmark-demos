@@ -276,7 +276,8 @@
         length: (v) => Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z),
         normalize: (v) => {
             const len = Vec3.length(v);
-            return len > 0 ? Vec3.mul(v, 1 / len) : v;
+            // Defensive check: return zero vector if length is too small
+            return len > 0.000001 ? Vec3.mul(v, 1 / len) : Vec3.create(0, 0, 0);
         },
         lerp: (a, b, t) => ({
             x: a.x + (b.x - a.x) * t,
@@ -563,11 +564,13 @@
         dragStart: null,
         isDragging: false,
         lastMouse: { x: 0, y: 0 },
+        lastPinchDist: null,
         targetRotX: 0.3,
         targetRotY: 0,
         morphProgress: 0,
         morphFrom: null,
-        morphTo: null
+        morphTo: null,
+        baseScale: 100  // Store user's scale preference separately from animated scale
     };
 
     const colors = {
@@ -603,11 +606,16 @@
     resize();
 
     function getCurrentMesh() {
-        let mesh = Shapes[state.shape]();
+        // Defensive check: ensure shape exists, fallback to cube
+        const shapeFunc = Shapes[state.shape] || Shapes.cube;
+        let mesh = shapeFunc();
 
         if (state.animation === 'morph' && state.morphFrom && state.morphTo) {
-            const fromMesh = Shapes[state.morphFrom]();
-            const toMesh = Shapes[state.morphTo]();
+            // Defensive check: ensure morph shapes exist
+            const fromFunc = Shapes[state.morphFrom] || Shapes.cube;
+            const toFunc = Shapes[state.morphTo] || Shapes.cube;
+            const fromMesh = fromFunc();
+            const toMesh = toFunc();
             const maxVerts = Math.max(fromMesh.vertices.length, toMesh.vertices.length);
 
             mesh.vertices = [];
@@ -616,6 +624,8 @@
                 const toV = toMesh.vertices[i % toMesh.vertices.length];
                 mesh.vertices.push(Vec3.lerp(fromV, toV, state.morphProgress));
             }
+            // Use faces from whichever mesh has more vertices for smoother morph
+            mesh.faces = fromMesh.vertices.length >= toMesh.vertices.length ? fromMesh.faces : toMesh.faces;
         }
 
         return mesh;
@@ -651,9 +661,14 @@
     }
 
     function getFaceNormal(vertices, face) {
-        const v0 = vertices[face[0]];
-        const v1 = vertices[face[1]];
-        const v2 = vertices[face[2]];
+        // Defensive check: ensure face has at least 3 vertices
+        if (!face || face.length < 3) {
+            return Vec3.create(0, 0, 1);
+        }
+        // Defensive check: ensure vertex indices are valid
+        const v0 = vertices[face[0]] || Vec3.create(0, 0, 0);
+        const v1 = vertices[face[1]] || Vec3.create(0, 0, 0);
+        const v2 = vertices[face[2]] || Vec3.create(0, 0, 0);
         const edge1 = Vec3.sub(v1, v0);
         const edge2 = Vec3.sub(v2, v0);
         return Vec3.normalize(Vec3.cross(edge1, edge2));
@@ -661,12 +676,21 @@
 
     function getFaceCenter(vertices, face) {
         const center = Vec3.create();
+        // Defensive check: ensure face is valid
+        if (!face || face.length === 0) {
+            return center;
+        }
+        let validCount = 0;
         face.forEach(i => {
-            center.x += vertices[i].x;
-            center.y += vertices[i].y;
-            center.z += vertices[i].z;
+            const v = vertices[i];
+            if (v) {
+                center.x += v.x;
+                center.y += v.y;
+                center.z += v.z;
+                validCount++;
+            }
         });
-        return Vec3.mul(center, 1 / face.length);
+        return validCount > 0 ? Vec3.mul(center, 1 / validCount) : center;
     }
 
     function drawStars(width, height, time) {
@@ -740,6 +764,9 @@
         const lightDir = Vec3.normalize(Vec3.create(0.5, 1, 0.8));
 
         sortedFaces.forEach(({ face }) => {
+            // Defensive check: skip invalid faces
+            if (!face || face.length < 3) return;
+
             const normal = getFaceNormal(transformedVerts, face);
             const center = getFaceCenter(transformedVerts, face);
 
@@ -752,7 +779,9 @@
             const ambient = 0.3;
             const light = ambient + diffuse * 0.7;
 
-            const points = face.map(i => projected[i]);
+            const points = face.map(i => projected[i]).filter(p => p); // Filter out undefined points
+            // Skip if not enough valid points
+            if (points.length < 3) return;
             const avgZ = points.reduce((sum, p) => sum + p.z, 0) / points.length;
 
             ctx.beginPath();
@@ -917,10 +946,12 @@
     }
 
     function drawShadow(projected, width, height) {
-        if (!state.shadow || projected.length === 0) return;
+        // Defensive checks
+        if (!state.shadow || !projected || projected.length === 0) return;
+        const pal = colors[state.color];
+        if (!pal) return;
 
         const shadowY = height * 0.7;
-        const pal = colors[state.color];
 
         ctx.save();
         ctx.globalAlpha = 0.15;
@@ -929,6 +960,7 @@
         ctx.beginPath();
         let first = true;
         projected.forEach(p => {
+            if (!p || typeof p.x !== 'number') return;
             const shadowX = p.x;
             const shadowScale = 0.5;
             const sx = width / 2 + (shadowX - width / 2) * shadowScale;
@@ -997,8 +1029,15 @@
     let fps = 60;
 
     function render(time) {
+        try {
         const width = window.innerWidth;
         const height = window.innerHeight;
+
+        // Defensive check: ensure valid dimensions
+        if (width <= 0 || height <= 0) {
+            requestAnimationFrame(render);
+            return;
+        }
 
         if (state.trail) {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
@@ -1015,6 +1054,9 @@
 
         const speedFactor = state.speed / 50;
 
+        // Reset scale to base value before animation modifies it
+        state.scale = state.baseScale;
+
         switch (state.animation) {
             case 'rotate':
                 state.rotY += 0.01 * speedFactor;
@@ -1027,7 +1069,7 @@
             case 'pulse':
                 state.rotY += 0.005 * speedFactor;
                 const pulseScale = 1 + Math.sin(time * 0.005) * 0.2;
-                state.scale = 100 * pulseScale;
+                state.scale = state.baseScale * pulseScale;
                 break;
             case 'orbit':
                 state.rotY += 0.015 * speedFactor;
@@ -1036,24 +1078,31 @@
                 break;
             case 'morph':
                 state.rotY += 0.01 * speedFactor;
-                state.morphProgress += 0.005;
+                state.morphProgress += 0.005 * speedFactor;
                 if (state.morphProgress >= 1) {
                     state.morphProgress = 0;
                     const shapes = ['cube', 'tetrahedron', 'octahedron', 'icosahedron', 'dodecahedron'];
                     state.morphFrom = state.morphTo || 'cube';
+                    // Ensure we pick a different shape
+                    let newShape;
                     do {
-                        state.morphTo = shapes[Math.floor(Math.random() * shapes.length)];
-                    } while (state.morphTo === state.morphFrom);
+                        newShape = shapes[Math.floor(Math.random() * shapes.length)];
+                    } while (newShape === state.morphFrom && shapes.length > 1);
+                    state.morphTo = newShape;
                 }
                 break;
             case 'explode':
                 state.rotY += 0.01 * speedFactor;
                 const explodeFactor = (Math.sin(time * 0.002) + 1) * 0.5;
-                state.scale = 100 * (1 + explodeFactor * 0.5);
+                state.scale = state.baseScale * (1 + explodeFactor * 0.5);
+                break;
+            case 'none':
+                // No automatic animation, just keep current rotation
                 break;
         }
 
-        if (!state.isDragging) {
+        // Only apply rotation interpolation when not dragging and not in "none" mode
+        if (!state.isDragging && state.animation !== 'none') {
             state.rotX += (state.targetRotX - state.rotX) * 0.1;
             state.rotY += (state.targetRotY - state.rotY) * 0.1;
         }
@@ -1123,6 +1172,14 @@
             document.getElementById('vertDisplay').textContent = mesh.vertices.length;
         }
 
+        } catch (error) {
+            // Log error but continue rendering to prevent crash
+            console.error('Render error:', error);
+            // Reset to safe state
+            ctx.globalAlpha = 1;
+            ctx.filter = 'none';
+            ctx.shadowBlur = 0;
+        }
         requestAnimationFrame(render);
     }
 
@@ -1166,7 +1223,10 @@
         state.targetRotX = 0.3;
         state.targetRotY = 0;
         state.camDist = 6;
+        state.baseScale = 100;
         state.scale = 100;
+        // Reset slider UI to match
+        document.getElementById('scaleSlider').value = 100;
     });
 
     canvas.addEventListener('touchstart', (e) => {
@@ -1229,7 +1289,8 @@
     });
 
     document.getElementById('scaleSlider').addEventListener('input', (e) => {
-        state.scale = parseInt(e.target.value);
+        state.baseScale = parseInt(e.target.value);
+        state.scale = state.baseScale;
     });
 
     document.getElementById('fovSlider').addEventListener('input', (e) => {
@@ -1269,7 +1330,10 @@
         state.targetRotX = 0.3;
         state.targetRotY = 0;
         state.camDist = 6;
+        state.baseScale = 100;
         state.scale = 100;
+        // Reset slider UI to match
+        document.getElementById('scaleSlider').value = 100;
     });
 
     document.getElementById('screenshotBtn').addEventListener('click', () => {

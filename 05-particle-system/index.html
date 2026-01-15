@@ -431,17 +431,23 @@
         const bloomCanvas = document.getElementById('bloomCanvas');
         const bloomCtx = bloomCanvas.getContext('2d');
 
-        let W, H;
+        // Initialize dimensions FIRST
+        let W = window.innerWidth;
+        let H = window.innerHeight;
 
         function resize() {
-            W = canvas.width = bloomCanvas.width = window.innerWidth;
-            H = canvas.height = bloomCanvas.height = window.innerHeight;
+            W = window.innerWidth;
+            H = window.innerHeight;
+            canvas.width = W;
+            canvas.height = H;
+            bloomCanvas.width = W;
+            bloomCanvas.height = H;
         }
         resize();
         window.addEventListener('resize', resize);
 
         // Performance tracking
-        let lastTime = performance.now();
+        let lastTime = 0;
         let frameCount = 0;
         let fps = 60;
         let fpsUpdateTime = 0;
@@ -518,6 +524,10 @@
                 // For secondary explosions
                 this.willExplode = false;
                 this.explodePattern = null;
+                // For rockets
+                this.isRocket = false;
+                this.pattern = null;
+                this.explodeY = 0;
             }
 
             reset() {
@@ -546,6 +556,9 @@
                 this.wobbleSpeed = 0;
                 this.willExplode = false;
                 this.explodePattern = null;
+                this.isRocket = false;
+                this.pattern = null;
+                this.explodeY = 0;
             }
 
             init(x, y, vx, vy, options = {}) {
@@ -562,7 +575,7 @@
                 this.rotationSpeed = (Math.random() - 0.5) * 0.2;
                 this.trailIdx = 0;
                 this.trailLen = 0;
-                this.maxTrail = options.trailLength || Math.floor(appearance.trailLength * 20);
+                this.maxTrail = options.trailLength !== undefined ? options.trailLength : Math.floor(appearance.trailLength * 20);
                 this.alpha = 1;
                 this.hue = options.hue !== undefined ? options.hue : Math.random() * 360;
                 this.active = true;
@@ -572,6 +585,9 @@
                 this.wobbleSpeed = Math.random() * 0.1;
                 this.willExplode = options.willExplode || false;
                 this.explodePattern = options.explodePattern || null;
+                this.isRocket = false;
+                this.pattern = null;
+                this.explodeY = 0;
 
                 // Parse color
                 const color = options.color || appearance.colors[Math.floor(Math.random() * appearance.colors.length)];
@@ -944,13 +960,13 @@
                 const speed = options.speed !== undefined ? options.speed : 3;
                 const spread = options.spread !== undefined ? options.spread : Math.PI * 2;
                 const baseAngle = options.angle !== undefined ? options.angle : -Math.PI / 2;
-                const angle = baseAngle + (Math.random() - 0.5) * spread;
+                const emitAngle = baseAngle + (Math.random() - 0.5) * spread;
 
                 const speedVar = options.speedVar !== undefined ? options.speedVar : 0.5;
                 const finalSpeed = speed * (1 - speedVar + Math.random() * speedVar * 2);
 
-                const vx = Math.cos(angle) * finalSpeed;
-                const vy = Math.sin(angle) * finalSpeed;
+                const vx = Math.cos(emitAngle) * finalSpeed;
+                const vy = Math.sin(emitAngle) * finalSpeed;
 
                 p.init(px, py, vx, vy, options);
                 activeParticles.push(p);
@@ -1687,6 +1703,11 @@
         // ============================================
 
         function update(timestamp) {
+            // Handle first frame (lastTime will be 0)
+            if (lastTime === 0) {
+                lastTime = timestamp;
+            }
+
             const dt = Math.min((timestamp - lastTime) / 16.67, 3);
             lastTime = timestamp;
 
@@ -1971,11 +1992,30 @@
         // INITIALIZATION
         // ============================================
 
+        // Initialize UI state
         setParticleType('spark');
         setEmitter('point');
         setMode('emit');
 
-        // Start with a spectacular firework show
+        // Create some immediate visible particles on load
+        function createInitialParticles() {
+            // Emit a burst of particles in the center
+            for (let i = 0; i < 50; i++) {
+                emit(W / 2, H / 2, 1, {
+                    type: 'spark',
+                    speed: 3 + Math.random() * 4,
+                    spread: Math.PI * 2,
+                    life: 1.5 + Math.random(),
+                    size: 4 + Math.random() * 3,
+                    glow: true
+                });
+            }
+        }
+
+        // Call immediately to show particles right away
+        createInitialParticles();
+
+        // Start with a spectacular firework show after a short delay
         setTimeout(() => {
             const patterns = ['peony', 'chrysanthemum', 'heart', 'star', 'spiral'];
             patterns.forEach((pattern, i) => {
@@ -1983,7 +2023,7 @@
             });
         }, 300);
 
-        // Start the loop
+        // Start the animation loop
         requestAnimationFrame(loop);
     </script>
 </body>

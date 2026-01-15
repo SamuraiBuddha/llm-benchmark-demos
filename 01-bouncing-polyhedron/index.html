@@ -393,34 +393,82 @@
             }
         };
 
+        // ==================== UTILITY FUNCTIONS ====================
+        // Safe number check - returns 0 if value is NaN, Infinity, or undefined
+        function safeNum(val, defaultVal = 0) {
+            if (val === undefined || val === null || !Number.isFinite(val)) {
+                return defaultVal;
+            }
+            return val;
+        }
+
+        // Clamp value between min and max
+        function clamp(val, min, max) {
+            return Math.max(min, Math.min(max, safeNum(val, min)));
+        }
+
         // ==================== MATH UTILITIES ====================
         class Vec3 {
             constructor(x = 0, y = 0, z = 0) {
-                this.x = x;
-                this.y = y;
-                this.z = z;
+                this.x = safeNum(x);
+                this.y = safeNum(y);
+                this.z = safeNum(z);
             }
 
             clone() { return new Vec3(this.x, this.y, this.z); }
-            add(v) { return new Vec3(this.x + v.x, this.y + v.y, this.z + v.z); }
-            sub(v) { return new Vec3(this.x - v.x, this.y - v.y, this.z - v.z); }
-            mul(s) { return new Vec3(this.x * s, this.y * s, this.z * s); }
-            dot(v) { return this.x * v.x + this.y * v.y + this.z * v.z; }
+            add(v) {
+                if (!v) return this.clone();
+                return new Vec3(this.x + safeNum(v.x), this.y + safeNum(v.y), this.z + safeNum(v.z));
+            }
+            sub(v) {
+                if (!v) return this.clone();
+                return new Vec3(this.x - safeNum(v.x), this.y - safeNum(v.y), this.z - safeNum(v.z));
+            }
+            mul(s) {
+                s = safeNum(s, 1);
+                return new Vec3(this.x * s, this.y * s, this.z * s);
+            }
+            dot(v) {
+                if (!v) return 0;
+                return this.x * safeNum(v.x) + this.y * safeNum(v.y) + this.z * safeNum(v.z);
+            }
             cross(v) {
+                if (!v) return new Vec3();
                 return new Vec3(
-                    this.y * v.z - this.z * v.y,
-                    this.z * v.x - this.x * v.z,
-                    this.x * v.y - this.y * v.x
+                    this.y * safeNum(v.z) - this.z * safeNum(v.y),
+                    this.z * safeNum(v.x) - this.x * safeNum(v.z),
+                    this.x * safeNum(v.y) - this.y * safeNum(v.x)
                 );
             }
-            length() { return Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z); }
+            length() {
+                const lenSq = this.x * this.x + this.y * this.y + this.z * this.z;
+                return Math.sqrt(safeNum(lenSq, 0));
+            }
             normalize() {
                 const len = this.length();
-                return len > 0 ? this.mul(1 / len) : new Vec3();
+                // Prevent division by zero
+                if (len < 0.0001) return new Vec3(0, 1, 0); // Return a default unit vector
+                return this.mul(1 / len);
             }
             reflect(normal) {
+                if (!normal) return this.clone();
                 const d = this.dot(normal) * 2;
                 return this.sub(normal.mul(d));
+            }
+
+            // Validate that this vector has no NaN or Infinity values
+            isValid() {
+                return Number.isFinite(this.x) && Number.isFinite(this.y) && Number.isFinite(this.z);
+            }
+
+            // Sanitize vector - replace invalid values with defaults
+            sanitize(defaultVec = null) {
+                const def = defaultVec || new Vec3();
+                return new Vec3(
+                    Number.isFinite(this.x) ? this.x : def.x,
+                    Number.isFinite(this.y) ? this.y : def.y,
+                    Number.isFinite(this.z) ? this.z : def.z
+                );
             }
         }
 
@@ -437,6 +485,7 @@
             }
 
             multiply(b) {
+                if (!b || !b.m) return this;
                 const a = this.m, bm = b.m, r = new Matrix4();
                 for (let i = 0; i < 4; i++) {
                     for (let j = 0; j < 4; j++) {
@@ -451,6 +500,7 @@
             }
 
             rotateX(angle) {
+                angle = safeNum(angle);
                 const c = Math.cos(angle), s = Math.sin(angle);
                 const r = new Matrix4();
                 r.m[5] = c; r.m[6] = -s;
@@ -459,6 +509,7 @@
             }
 
             rotateY(angle) {
+                angle = safeNum(angle);
                 const c = Math.cos(angle), s = Math.sin(angle);
                 const r = new Matrix4();
                 r.m[0] = c; r.m[2] = s;
@@ -467,6 +518,7 @@
             }
 
             rotateZ(angle) {
+                angle = safeNum(angle);
                 const c = Math.cos(angle), s = Math.sin(angle);
                 const r = new Matrix4();
                 r.m[0] = c; r.m[1] = -s;
@@ -475,6 +527,7 @@
             }
 
             transformPoint(v) {
+                if (!v) return new Vec3();
                 const m = this.m;
                 return new Vec3(
                     m[0] * v.x + m[1] * v.y + m[2] * v.z + m[3],
@@ -484,6 +537,7 @@
             }
 
             transformVector(v) {
+                if (!v) return new Vec3();
                 const m = this.m;
                 return new Vec3(
                     m[0] * v.x + m[1] * v.y + m[2] * v.z,
@@ -579,15 +633,28 @@
                 const scale = 1.8;
 
                 oct.faces.forEach(face => {
-                    const center = face.reduce((acc, i) => acc.add(vertices[i]), new Vec3()).mul(1/3);
+                    // Defensive: ensure all face indices are valid
+                    if (!face || face.length < 3) return;
+                    const validIndices = face.filter(i => i >= 0 && i < vertices.length);
+                    if (validIndices.length < 3) return;
+
+                    const center = validIndices.reduce((acc, i) => acc.add(vertices[i]), new Vec3()).mul(1/validIndices.length);
                     vertices.push(center.normalize().mul(scale));
                 });
 
                 const faces = [];
                 oct.faces.forEach((face, i) => {
+                    if (!face || face.length < 3) return;
                     const tip = 6 + i;
+                    if (tip >= vertices.length) return;
+
                     for (let j = 0; j < 3; j++) {
-                        faces.push([face[j], face[(j + 1) % 3], tip]);
+                        const idx1 = face[j];
+                        const idx2 = face[(j + 1) % 3];
+                        // Validate indices
+                        if (idx1 >= 0 && idx1 < vertices.length && idx2 >= 0 && idx2 < vertices.length) {
+                            faces.push([idx1, idx2, tip]);
+                        }
                     }
                 });
 
@@ -598,10 +665,10 @@
         // ==================== BALL PHYSICS ====================
         class Ball {
             constructor(position, velocity, color, radius = 0.08) {
-                this.pos = position;
-                this.vel = velocity;
-                this.color = color;
-                this.radius = radius;
+                this.pos = (position && position.isValid()) ? position : new Vec3(0, 0, 0);
+                this.vel = (velocity && velocity.isValid()) ? velocity : new Vec3(0, 0, 0);
+                this.color = color || '#ffffff';
+                this.radius = safeNum(radius, 0.08);
                 this.trail = [];
                 this.maxTrail = 50;
                 this.spin = new Vec3(
@@ -613,8 +680,23 @@
             }
 
             update(dt, gravity, faces, polyMatrix) {
+                // Validate inputs
+                dt = safeNum(dt, 0.016);
+                gravity = safeNum(gravity, 5);
+
+                // Sanitize position and velocity to prevent NaN propagation
+                this.pos = this.pos.sanitize();
+                this.vel = this.vel.sanitize();
+
                 // Apply gravity in world space
                 this.vel = this.vel.add(new Vec3(0, -gravity * dt, 0));
+
+                // Clamp velocity to prevent explosion
+                const maxVel = 50;
+                const velLen = this.vel.length();
+                if (velLen > maxVel) {
+                    this.vel = this.vel.mul(maxVel / velLen);
+                }
 
                 // Store old position for trail
                 const oldPos = this.pos.clone();
@@ -622,11 +704,15 @@
                 // Update position
                 this.pos = this.pos.add(this.vel.mul(dt));
 
+                // Sanitize after update
+                this.pos = this.pos.sanitize();
+                this.vel = this.vel.sanitize();
+
                 // Update spin decay
-                this.spin = this.spin.mul(0.999);
+                this.spin = this.spin.mul(0.999).sanitize();
 
                 // Decay glow
-                this.glowIntensity = Math.max(1, this.glowIntensity * 0.95);
+                this.glowIntensity = clamp(this.glowIntensity * 0.95, 1, 10);
 
                 // Update trail
                 if (this.trail.length === 0 || this.trail[this.trail.length - 1].sub(this.pos).length() > 0.02) {
@@ -637,54 +723,87 @@
                 }
 
                 // Check collision with faces
+                if (!faces || !Array.isArray(faces) || faces.length === 0 || !polyMatrix) {
+                    return null;
+                }
                 return this.checkCollisions(faces, polyMatrix);
             }
 
             checkCollisions(faces, polyMatrix) {
                 let collision = null;
 
+                // Defensive checks
+                if (!faces || !Array.isArray(faces) || !polyMatrix) {
+                    return null;
+                }
+
                 for (const face of faces) {
-                    // Transform face vertices to world space
-                    const worldVerts = face.vertices.map(v => polyMatrix.transformPoint(v));
-                    const worldNormal = polyMatrix.transformVector(face.normal).normalize();
+                    // Skip invalid faces
+                    if (!face || !face.vertices || !Array.isArray(face.vertices) || face.vertices.length < 3 || !face.normal) {
+                        continue;
+                    }
 
-                    // Calculate face center
-                    const center = worldVerts.reduce((acc, v) => acc.add(v), new Vec3()).mul(1 / worldVerts.length);
+                    try {
+                        // Transform face vertices to world space
+                        const worldVerts = face.vertices.map(v => {
+                            if (!v) return new Vec3();
+                            return polyMatrix.transformPoint(v);
+                        });
 
-                    // Distance from ball to plane
-                    const dist = this.pos.sub(center).dot(worldNormal);
+                        // Transform and normalize the normal
+                        const worldNormal = polyMatrix.transformVector(face.normal);
+                        if (!worldNormal || worldNormal.length() < 0.0001) {
+                            continue;
+                        }
+                        const normalizedNormal = worldNormal.normalize();
 
-                    if (dist < this.radius && dist > -this.radius * 2) {
-                        // Check if ball is inside face polygon (simplified)
-                        const toCenter = center.sub(this.pos);
-                        const distToCenter = toCenter.length();
+                        // Calculate face center
+                        const center = worldVerts.reduce((acc, v) => acc.add(v), new Vec3()).mul(1 / worldVerts.length);
 
-                        if (distToCenter < 1.5) { // Approximate containment check
-                            // Collision response
-                            const velNormal = this.vel.dot(worldNormal);
+                        // Distance from ball to plane
+                        const dist = this.pos.sub(center).dot(normalizedNormal);
 
-                            if (velNormal < 0) {
-                                // Reflect velocity
-                                const restitution = 0.85;
-                                this.vel = this.vel.sub(worldNormal.mul(velNormal * (1 + restitution)));
+                        if (dist < this.radius && dist > -this.radius * 2) {
+                            // Check if ball is inside face polygon (simplified)
+                            const toCenter = center.sub(this.pos);
+                            const distToCenter = toCenter.length();
 
-                                // Add spin from collision
-                                const tangent = this.vel.sub(worldNormal.mul(this.vel.dot(worldNormal)));
-                                this.spin = this.spin.add(tangent.cross(worldNormal).mul(0.5));
+                            if (distToCenter < 1.5) { // Approximate containment check
+                                // Collision response
+                                const velNormal = this.vel.dot(normalizedNormal);
 
-                                // Push ball out of face
-                                this.pos = this.pos.add(worldNormal.mul(this.radius - dist + 0.01));
+                                if (velNormal < 0) {
+                                    // Reflect velocity
+                                    const restitution = 0.85;
+                                    this.vel = this.vel.sub(normalizedNormal.mul(velNormal * (1 + restitution)));
 
-                                // Boost glow on collision
-                                this.glowIntensity = 3;
+                                    // Add spin from collision
+                                    const tangent = this.vel.sub(normalizedNormal.mul(this.vel.dot(normalizedNormal)));
+                                    this.spin = this.spin.add(tangent.cross(normalizedNormal).mul(0.5));
 
-                                collision = {
-                                    point: this.pos.clone(),
-                                    normal: worldNormal,
-                                    velocity: Math.abs(velNormal)
-                                };
+                                    // Push ball out of face
+                                    this.pos = this.pos.add(normalizedNormal.mul(this.radius - dist + 0.01));
+
+                                    // Sanitize after collision
+                                    this.pos = this.pos.sanitize();
+                                    this.vel = this.vel.sanitize();
+                                    this.spin = this.spin.sanitize();
+
+                                    // Boost glow on collision
+                                    this.glowIntensity = 3;
+
+                                    collision = {
+                                        point: this.pos.clone(),
+                                        normal: normalizedNormal,
+                                        velocity: Math.abs(velNormal)
+                                    };
+                                }
                             }
                         }
+                    } catch (e) {
+                        // Skip this face on error
+                        console.warn('Collision check error:', e);
+                        continue;
                     }
                 }
 
@@ -695,17 +814,18 @@
         // ==================== PARTICLE SYSTEM ====================
         class Particle {
             constructor(pos, vel, color, life = 1) {
-                this.pos = pos;
-                this.vel = vel;
-                this.color = color;
-                this.life = life;
-                this.maxLife = life;
+                this.pos = (pos && pos.isValid()) ? pos : new Vec3();
+                this.vel = (vel && vel.isValid()) ? vel : new Vec3();
+                this.color = color || '#ffffff';
+                this.life = safeNum(life, 1);
+                this.maxLife = this.life;
                 this.size = 3 + Math.random() * 3;
             }
 
             update(dt) {
-                this.pos = this.pos.add(this.vel.mul(dt));
-                this.vel = this.vel.mul(0.98);
+                dt = safeNum(dt, 0.016);
+                this.pos = this.pos.add(this.vel.mul(dt)).sanitize();
+                this.vel = this.vel.mul(0.98).sanitize();
                 this.life -= dt;
                 return this.life > 0;
             }
@@ -715,7 +835,15 @@
         class PolyhedronDemo {
             constructor() {
                 this.canvas = document.getElementById('canvas');
+                if (!this.canvas) {
+                    console.error('Canvas element not found');
+                    return;
+                }
                 this.ctx = this.canvas.getContext('2d');
+                if (!this.ctx) {
+                    console.error('Could not get 2D context');
+                    return;
+                }
 
                 this.resize();
                 window.addEventListener('resize', () => this.resize());
@@ -749,11 +877,13 @@
                 this.lastTime = 0;
                 this.frameCount = 0;
                 this.fps = 60;
+                this.fpsTime = 0;
 
                 // Input
                 this.isDragging = false;
                 this.lastMouseX = 0;
                 this.lastMouseY = 0;
+                this.lastPinchDist = null;
 
                 this.setupEventListeners();
                 this.initPolyhedron();
@@ -764,6 +894,7 @@
             }
 
             resize() {
+                if (!this.canvas) return;
                 this.canvas.width = window.innerWidth;
                 this.canvas.height = window.innerHeight;
                 this.centerX = this.canvas.width / 2;
@@ -773,7 +904,10 @@
 
             initSoundBars() {
                 const container = document.getElementById('sound-bars');
+                if (!container) return;
+
                 container.innerHTML = '';
+                this.soundBars = [];
                 for (let i = 0; i < 32; i++) {
                     const bar = document.createElement('div');
                     bar.className = 'sound-bar';
@@ -784,22 +918,96 @@
             }
 
             initPolyhedron() {
-                const data = Polyhedra[this.polyType]();
-                this.polyhedron = {
-                    vertices: data.vertices.map(v => v.mul(1.2)),
-                    faces: data.faces.map(face => {
-                        const verts = face.map(i => data.vertices[i].mul(1.2));
-                        const v1 = verts[1].sub(verts[0]);
-                        const v2 = verts[2].sub(verts[0]);
-                        const normal = v1.cross(v2).normalize();
-                        return { indices: face, vertices: verts, normal };
-                    })
-                };
+                // Validate polyType exists
+                if (!Polyhedra[this.polyType]) {
+                    console.warn('Invalid polyhedron type:', this.polyType);
+                    this.polyType = 'icosahedron';
+                }
+
+                try {
+                    const data = Polyhedra[this.polyType]();
+
+                    if (!data || !data.vertices || !data.faces) {
+                        console.error('Invalid polyhedron data');
+                        return;
+                    }
+
+                    this.polyhedron = {
+                        vertices: data.vertices.map(v => v ? v.mul(1.2) : new Vec3()),
+                        faces: data.faces.map(face => {
+                            // Defensive: validate face indices
+                            if (!face || !Array.isArray(face) || face.length < 3) {
+                                return null;
+                            }
+
+                            // Filter valid indices
+                            const validIndices = face.filter(i =>
+                                typeof i === 'number' && i >= 0 && i < data.vertices.length
+                            );
+
+                            if (validIndices.length < 3) {
+                                return null;
+                            }
+
+                            const verts = validIndices.map(i => {
+                                const v = data.vertices[i];
+                                return v ? v.mul(1.2) : new Vec3();
+                            });
+
+                            // Calculate normal with validation
+                            const v1 = verts[1].sub(verts[0]);
+                            const v2 = verts[2].sub(verts[0]);
+                            let normal = v1.cross(v2);
+
+                            // Ensure normal is valid
+                            if (normal.length() < 0.0001) {
+                                normal = new Vec3(0, 1, 0);
+                            } else {
+                                normal = normal.normalize();
+                            }
+
+                            return { indices: validIndices, vertices: verts, normal };
+                        }).filter(face => face !== null) // Remove invalid faces
+                    };
+
+                    // Reset balls to center when shape changes to prevent them being outside
+                    if (this.balls && this.balls.length > 0) {
+                        this.balls.forEach(ball => {
+                            // If ball is too far from center, reset it
+                            if (ball.pos.length() > 0.8) {
+                                ball.pos = new Vec3(
+                                    (Math.random() - 0.5) * 0.3,
+                                    (Math.random() - 0.5) * 0.3,
+                                    (Math.random() - 0.5) * 0.3
+                                );
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.error('Error initializing polyhedron:', e);
+                    // Create a fallback simple shape
+                    this.polyhedron = {
+                        vertices: [
+                            new Vec3(1, 0, 0), new Vec3(-1, 0, 0),
+                            new Vec3(0, 1, 0), new Vec3(0, -1, 0),
+                            new Vec3(0, 0, 1), new Vec3(0, 0, -1)
+                        ],
+                        faces: []
+                    };
+                }
             }
 
             initBalls(count) {
+                // Ensure theme is valid
+                const themeData = CONFIG.themes[this.theme];
+                if (!themeData) {
+                    console.warn('Invalid theme:', this.theme);
+                    this.theme = 'cyberpunk';
+                }
                 const theme = CONFIG.themes[this.theme];
                 const colors = [theme.primary, theme.secondary, theme.accent];
+
+                count = clamp(count, 1, 100); // Reasonable limits
 
                 this.balls = [];
                 for (let i = 0; i < count; i++) {
@@ -819,15 +1027,29 @@
 
             updateTheme() {
                 const theme = CONFIG.themes[this.theme];
+                if (!theme) {
+                    console.warn('Theme not found:', this.theme);
+                    return;
+                }
+
                 document.body.style.background = `linear-gradient(135deg, ${theme.bg.join(', ')})`;
-                document.getElementById('impact-flash').style.background = `radial-gradient(circle, ${theme.glow}, transparent)`;
+
+                const flash = document.getElementById('impact-flash');
+                if (flash) {
+                    flash.style.background = `radial-gradient(circle, ${theme.glow}, transparent)`;
+                }
+
                 document.documentElement.style.setProperty('--accent-color', theme.primary);
 
-                // Update ball colors
-                const colors = [theme.primary, theme.secondary, theme.accent];
-                this.balls.forEach((ball, i) => {
-                    ball.color = colors[i % colors.length];
-                });
+                // Update ball colors - with null check
+                if (this.balls && Array.isArray(this.balls)) {
+                    const colors = [theme.primary, theme.secondary, theme.accent];
+                    this.balls.forEach((ball, i) => {
+                        if (ball) {
+                            ball.color = colors[i % colors.length];
+                        }
+                    });
+                }
             }
 
             setupEventListeners() {
@@ -844,7 +1066,7 @@
                         const dy = e.clientY - this.lastMouseY;
                         this.cameraAngleY += dx * 0.005;
                         this.cameraAngleX += dy * 0.005;
-                        this.cameraAngleX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.cameraAngleX));
+                        this.cameraAngleX = clamp(this.cameraAngleX, -Math.PI / 2, Math.PI / 2);
                         this.lastMouseX = e.clientX;
                         this.lastMouseY = e.clientY;
                     }
@@ -857,8 +1079,8 @@
                 this.canvas.addEventListener('wheel', (e) => {
                     e.preventDefault();
                     this.cameraDistance += e.deltaY * 0.005;
-                    this.cameraDistance = Math.max(2, Math.min(10, this.cameraDistance));
-                });
+                    this.cameraDistance = clamp(this.cameraDistance, 2, 10);
+                }, { passive: false });
 
                 // Touch controls
                 this.canvas.addEventListener('touchstart', (e) => {
@@ -868,7 +1090,7 @@
                         this.lastMouseX = e.touches[0].clientX;
                         this.lastMouseY = e.touches[0].clientY;
                     }
-                });
+                }, { passive: false });
 
                 this.canvas.addEventListener('touchmove', (e) => {
                     e.preventDefault();
@@ -877,7 +1099,7 @@
                         const dy = e.touches[0].clientY - this.lastMouseY;
                         this.cameraAngleY += dx * 0.005;
                         this.cameraAngleX += dy * 0.005;
-                        this.cameraAngleX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.cameraAngleX));
+                        this.cameraAngleX = clamp(this.cameraAngleX, -Math.PI / 2, Math.PI / 2);
                         this.lastMouseX = e.touches[0].clientX;
                         this.lastMouseY = e.touches[0].clientY;
                     } else if (e.touches.length === 2) {
@@ -888,11 +1110,11 @@
                         );
                         if (this.lastPinchDist) {
                             this.cameraDistance -= (dist - this.lastPinchDist) * 0.01;
-                            this.cameraDistance = Math.max(2, Math.min(10, this.cameraDistance));
+                            this.cameraDistance = clamp(this.cameraDistance, 2, 10);
                         }
                         this.lastPinchDist = dist;
                     }
-                });
+                }, { passive: false });
 
                 this.canvas.addEventListener('touchend', () => {
                     this.isDragging = false;
@@ -900,68 +1122,115 @@
                 });
 
                 // UI Controls
-                document.getElementById('polyhedron-select').addEventListener('change', (e) => {
-                    this.polyType = e.target.value;
-                    this.initPolyhedron();
-                });
-
-                document.getElementById('ball-count').addEventListener('input', (e) => {
-                    document.getElementById('ball-count-value').textContent = e.target.value;
-                    const newCount = parseInt(e.target.value);
-                    while (this.balls.length < newCount) {
-                        this.addBall();
-                    }
-                    while (this.balls.length > newCount) {
-                        this.balls.pop();
-                    }
-                });
-
-                document.getElementById('rotation-speed').addEventListener('input', (e) => {
-                    document.getElementById('rotation-value').textContent = e.target.value;
-                    this.rotationSpeed = e.target.value / 100;
-                });
-
-                document.getElementById('gravity').addEventListener('input', (e) => {
-                    document.getElementById('gravity-value').textContent = e.target.value;
-                    this.gravity = e.target.value / 100;
-                });
-
-                document.getElementById('trail-length').addEventListener('input', (e) => {
-                    document.getElementById('trail-value').textContent = e.target.value;
-                    this.trailLength = e.target.value / 100;
-                    this.balls.forEach(ball => {
-                        ball.maxTrail = Math.floor(e.target.value);
+                const polySelect = document.getElementById('polyhedron-select');
+                if (polySelect) {
+                    polySelect.addEventListener('change', (e) => {
+                        this.polyType = e.target.value;
+                        this.initPolyhedron();
                     });
-                });
+                }
 
-                document.getElementById('camera-mode').addEventListener('change', (e) => {
-                    this.cameraMode = e.target.value;
-                });
+                const ballCountSlider = document.getElementById('ball-count');
+                if (ballCountSlider) {
+                    ballCountSlider.addEventListener('input', (e) => {
+                        const valueDisplay = document.getElementById('ball-count-value');
+                        if (valueDisplay) valueDisplay.textContent = e.target.value;
+
+                        const newCount = parseInt(e.target.value) || 1;
+                        while (this.balls.length < newCount) {
+                            this.addBall();
+                        }
+                        while (this.balls.length > newCount && this.balls.length > 1) {
+                            this.balls.pop();
+                        }
+                    });
+                }
+
+                const rotationSlider = document.getElementById('rotation-speed');
+                if (rotationSlider) {
+                    rotationSlider.addEventListener('input', (e) => {
+                        const valueDisplay = document.getElementById('rotation-value');
+                        if (valueDisplay) valueDisplay.textContent = e.target.value;
+                        this.rotationSpeed = (parseInt(e.target.value) || 0) / 100;
+                    });
+                }
+
+                const gravitySlider = document.getElementById('gravity');
+                if (gravitySlider) {
+                    gravitySlider.addEventListener('input', (e) => {
+                        const valueDisplay = document.getElementById('gravity-value');
+                        if (valueDisplay) valueDisplay.textContent = e.target.value;
+                        this.gravity = (parseInt(e.target.value) || 0) / 100;
+                    });
+                }
+
+                const trailSlider = document.getElementById('trail-length');
+                if (trailSlider) {
+                    trailSlider.addEventListener('input', (e) => {
+                        const valueDisplay = document.getElementById('trail-value');
+                        if (valueDisplay) valueDisplay.textContent = e.target.value;
+                        this.trailLength = (parseInt(e.target.value) || 0) / 100;
+                        if (this.balls && Array.isArray(this.balls)) {
+                            this.balls.forEach(ball => {
+                                if (ball) {
+                                    ball.maxTrail = Math.max(1, Math.floor(parseInt(e.target.value) || 1));
+                                }
+                            });
+                        }
+                    });
+                }
+
+                const cameraSelect = document.getElementById('camera-mode');
+                if (cameraSelect) {
+                    cameraSelect.addEventListener('change', (e) => {
+                        this.cameraMode = e.target.value;
+                    });
+                }
 
                 document.querySelectorAll('.theme-btn').forEach(btn => {
                     btn.addEventListener('click', () => {
                         document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
                         btn.classList.add('active');
-                        this.theme = btn.dataset.theme;
-                        this.updateTheme();
+                        const newTheme = btn.dataset.theme;
+                        if (CONFIG.themes[newTheme]) {
+                            this.theme = newTheme;
+                            this.updateTheme();
+                        }
                     });
                 });
 
-                document.getElementById('reset-btn').addEventListener('click', () => {
-                    this.collisionCount = 0;
-                    this.initBalls(this.balls.length);
-                    this.particles = [];
-                });
+                const resetBtn = document.getElementById('reset-btn');
+                if (resetBtn) {
+                    resetBtn.addEventListener('click', () => {
+                        this.collisionCount = 0;
+                        const currentCount = this.balls ? this.balls.length : 3;
+                        this.initBalls(Math.max(1, currentCount));
+                        this.particles = [];
+                    });
+                }
 
-                document.getElementById('add-ball-btn').addEventListener('click', () => {
-                    this.addBall();
-                    document.getElementById('ball-count').value = this.balls.length;
-                    document.getElementById('ball-count-value').textContent = this.balls.length;
-                });
+                const addBallBtn = document.getElementById('add-ball-btn');
+                if (addBallBtn) {
+                    addBallBtn.addEventListener('click', () => {
+                        this.addBall();
+                        const ballCountSlider = document.getElementById('ball-count');
+                        const ballCountValue = document.getElementById('ball-count-value');
+                        if (ballCountSlider) ballCountSlider.value = this.balls.length;
+                        if (ballCountValue) ballCountValue.textContent = this.balls.length;
+                    });
+                }
             }
 
             addBall() {
+                // Limit max balls to prevent performance issues
+                if (this.balls.length >= 20) {
+                    console.warn('Maximum ball count reached');
+                    return;
+                }
+
                 const theme = CONFIG.themes[this.theme];
+                if (!theme) return;
+
                 const colors = [theme.primary, theme.secondary, theme.accent];
                 const pos = new Vec3(
                     (Math.random() - 0.5) * 0.3,
@@ -977,58 +1246,87 @@
             }
 
             triggerCollisionEffect(collision) {
+                if (!collision) return;
+
                 this.collisionCount++;
 
                 // Flash effect
                 const flash = document.getElementById('impact-flash');
-                flash.style.opacity = Math.min(0.3, collision.velocity * 0.1);
-                setTimeout(() => flash.style.opacity = 0, 50);
+                if (flash) {
+                    const velocity = safeNum(collision.velocity, 0);
+                    flash.style.opacity = Math.min(0.3, velocity * 0.1);
+                    setTimeout(() => flash.style.opacity = 0, 50);
+                }
 
                 // Sound bars
-                const intensity = Math.min(1, collision.velocity * 0.3);
-                const centerBar = Math.floor(Math.random() * this.soundBars.length);
-                for (let i = 0; i < this.soundBars.length; i++) {
-                    const dist = Math.abs(i - centerBar);
-                    const height = Math.max(0, intensity - dist * 0.05) * 60;
-                    this.soundBars[i].target = Math.max(this.soundBars[i].target, height);
+                if (this.soundBars && this.soundBars.length > 0) {
+                    const velocity = safeNum(collision.velocity, 0);
+                    const intensity = Math.min(1, velocity * 0.3);
+                    const centerBar = Math.floor(Math.random() * this.soundBars.length);
+                    for (let i = 0; i < this.soundBars.length; i++) {
+                        const bar = this.soundBars[i];
+                        if (bar) {
+                            const dist = Math.abs(i - centerBar);
+                            const height = Math.max(0, intensity - dist * 0.05) * 60;
+                            bar.target = Math.max(bar.target || 0, height);
+                        }
+                    }
                 }
 
                 // Spawn particles
                 const theme = CONFIG.themes[this.theme];
+                if (!theme || !collision.point || !collision.normal) return;
+
                 for (let i = 0; i < 15; i++) {
                     const vel = new Vec3(
-                        (Math.random() - 0.5) * 2 + collision.normal.x,
-                        (Math.random() - 0.5) * 2 + collision.normal.y,
-                        (Math.random() - 0.5) * 2 + collision.normal.z
+                        (Math.random() - 0.5) * 2 + (collision.normal.x || 0),
+                        (Math.random() - 0.5) * 2 + (collision.normal.y || 0),
+                        (Math.random() - 0.5) * 2 + (collision.normal.z || 0)
                     );
+                    const colors = [theme.primary, theme.secondary, theme.accent];
                     this.particles.push(new Particle(
                         collision.point.clone(),
                         vel,
-                        [theme.primary, theme.secondary, theme.accent][Math.floor(Math.random() * 3)],
+                        colors[Math.floor(Math.random() * 3)],
                         0.5 + Math.random() * 0.5
                     ));
+                }
+
+                // Limit particles to prevent memory issues
+                if (this.particles.length > 500) {
+                    this.particles = this.particles.slice(-300);
                 }
             }
 
             project(point, cameraMatrix) {
+                if (!point || !cameraMatrix) {
+                    return { x: this.centerX, y: this.centerY, z: 0, scale: 1 };
+                }
+
                 const transformed = cameraMatrix.transformPoint(point);
-                const perspective = this.cameraDistance / (this.cameraDistance + transformed.z);
+
+                // Prevent division by zero or very small numbers
+                const zOffset = this.cameraDistance + safeNum(transformed.z, 0);
+                const perspective = zOffset > 0.1 ? this.cameraDistance / zOffset : this.cameraDistance / 0.1;
+
                 return {
-                    x: this.centerX + transformed.x * this.scale * perspective,
-                    y: this.centerY - transformed.y * this.scale * perspective,
-                    z: transformed.z,
-                    scale: perspective
+                    x: safeNum(this.centerX + transformed.x * this.scale * perspective, this.centerX),
+                    y: safeNum(this.centerY - transformed.y * this.scale * perspective, this.centerY),
+                    z: safeNum(transformed.z, 0),
+                    scale: safeNum(perspective, 1)
                 };
             }
 
             animate(time) {
-                const dt = Math.min((time - this.lastTime) / 1000, 0.05);
+                time = safeNum(time, performance.now());
+                const dt = clamp((time - this.lastTime) / 1000, 0.001, 0.05);
                 this.lastTime = time;
 
                 // FPS calculation
                 this.frameCount++;
                 if (this.frameCount >= 30) {
-                    this.fps = Math.round(30 / ((time - this.fpsTime) / 1000));
+                    const elapsed = (time - this.fpsTime) / 1000;
+                    this.fps = elapsed > 0 ? Math.round(30 / elapsed) : 60;
                     this.fpsTime = time;
                     this.frameCount = 0;
                 }
@@ -1039,6 +1337,13 @@
                 this.rotation.y += dt * this.rotationSpeed * 0.5;
                 this.rotation.z += dt * this.rotationSpeed * 0.2;
 
+                // Sanitize rotation to prevent overflow
+                this.rotation = this.rotation.sanitize();
+                // Keep rotation values in reasonable range
+                this.rotation.x = this.rotation.x % (Math.PI * 2);
+                this.rotation.y = this.rotation.y % (Math.PI * 2);
+                this.rotation.z = this.rotation.z % (Math.PI * 2);
+
                 // Build matrices
                 const polyMatrix = new Matrix4()
                     .rotateX(this.rotation.x)
@@ -1046,84 +1351,144 @@
                     .rotateZ(this.rotation.z);
 
                 // Update camera
-                let camAngleX = this.cameraAngleX;
-                let camAngleY = this.cameraAngleY;
+                let camAngleX = safeNum(this.cameraAngleX, 0);
+                let camAngleY = safeNum(this.cameraAngleY, 0);
 
-                if (this.cameraMode === 'follow' && this.balls.length > 0) {
-                    const ballPos = this.balls[0].pos;
-                    camAngleY = Math.atan2(ballPos.x, ballPos.z);
-                    camAngleX = Math.atan2(ballPos.y, Math.sqrt(ballPos.x * ballPos.x + ballPos.z * ballPos.z));
+                // Safe camera mode handling with ball existence checks
+                if (this.cameraMode === 'follow') {
+                    // Only follow if there are balls
+                    if (this.balls && this.balls.length > 0 && this.balls[0]) {
+                        const ballPos = this.balls[0].pos;
+                        if (ballPos && ballPos.isValid()) {
+                            const xz = Math.sqrt(ballPos.x * ballPos.x + ballPos.z * ballPos.z);
+                            if (xz > 0.001) {
+                                camAngleY = Math.atan2(ballPos.x, ballPos.z);
+                            }
+                            if (xz > 0.001 || Math.abs(ballPos.y) > 0.001) {
+                                camAngleX = Math.atan2(ballPos.y, xz);
+                            }
+                        }
+                    }
+                    // If no balls, keep current camera angles
                 } else if (this.cameraMode === 'dynamic') {
                     camAngleY += dt * 0.2;
                     camAngleX = Math.sin(time * 0.0005) * 0.3;
                 }
+                // 'fixed' and 'orbit' modes use the stored angles directly
 
                 const cameraMatrix = new Matrix4()
                     .rotateX(camAngleX)
                     .rotateY(camAngleY);
 
-                // Update balls
-                for (const ball of this.balls) {
-                    const collision = ball.update(dt, this.gravity * 10, this.polyhedron.faces, polyMatrix);
-                    if (collision) {
-                        this.triggerCollisionEffect(collision);
+                // Update balls - with polyhedron validation
+                if (this.balls && Array.isArray(this.balls) && this.polyhedron && this.polyhedron.faces) {
+                    for (const ball of this.balls) {
+                        if (!ball) continue;
+                        try {
+                            const collision = ball.update(dt, this.gravity * 10, this.polyhedron.faces, polyMatrix);
+                            if (collision) {
+                                this.triggerCollisionEffect(collision);
+                            }
+                        } catch (e) {
+                            console.warn('Ball update error:', e);
+                        }
                     }
                 }
 
                 // Update particles
-                this.particles = this.particles.filter(p => p.update(dt));
+                if (this.particles && Array.isArray(this.particles)) {
+                    this.particles = this.particles.filter(p => p && p.update(dt));
+                }
 
                 // Update sound bars
-                for (const bar of this.soundBars) {
-                    bar.value += (bar.target - bar.value) * 0.3;
-                    bar.target *= 0.9;
-                    bar.element.style.height = Math.max(5, bar.value) + 'px';
+                if (this.soundBars && Array.isArray(this.soundBars)) {
+                    for (const bar of this.soundBars) {
+                        if (!bar || !bar.element) continue;
+                        bar.value = safeNum(bar.value, 0);
+                        bar.target = safeNum(bar.target, 0);
+                        bar.value += (bar.target - bar.value) * 0.3;
+                        bar.target *= 0.9;
+                        bar.element.style.height = Math.max(5, bar.value) + 'px';
+                    }
                 }
 
                 // Render
                 this.render(polyMatrix, cameraMatrix);
 
-                // Update stats
-                const avgVel = this.balls.reduce((acc, b) => acc + b.vel.length(), 0) / this.balls.length;
-                const totalEnergy = this.balls.reduce((acc, b) => acc + b.vel.length() * b.vel.length() * 0.5, 0);
-                const avgSpin = this.balls.reduce((acc, b) => acc + b.spin.length(), 0) / this.balls.length;
+                // Update stats - with safe division
+                const ballCount = (this.balls && this.balls.length > 0) ? this.balls.length : 1;
+                const avgVel = this.balls ?
+                    this.balls.reduce((acc, b) => acc + (b ? b.vel.length() : 0), 0) / ballCount : 0;
+                const totalEnergy = this.balls ?
+                    this.balls.reduce((acc, b) => {
+                        if (!b) return acc;
+                        const vel = b.vel.length();
+                        return acc + vel * vel * 0.5;
+                    }, 0) : 0;
+                const avgSpin = this.balls ?
+                    this.balls.reduce((acc, b) => acc + (b ? b.spin.length() : 0), 0) / ballCount : 0;
 
-                document.getElementById('velocity').textContent = avgVel.toFixed(2);
-                document.getElementById('collisions').textContent = this.collisionCount;
-                document.getElementById('energy').textContent = totalEnergy.toFixed(2);
-                document.getElementById('spin').textContent = avgSpin.toFixed(2);
-                document.getElementById('fps').textContent = this.fps;
+                const velEl = document.getElementById('velocity');
+                const collEl = document.getElementById('collisions');
+                const energyEl = document.getElementById('energy');
+                const spinEl = document.getElementById('spin');
+                const fpsEl = document.getElementById('fps');
+
+                if (velEl) velEl.textContent = safeNum(avgVel).toFixed(2);
+                if (collEl) collEl.textContent = this.collisionCount;
+                if (energyEl) energyEl.textContent = safeNum(totalEnergy).toFixed(2);
+                if (spinEl) spinEl.textContent = safeNum(avgSpin).toFixed(2);
+                if (fpsEl) fpsEl.textContent = this.fps;
 
                 requestAnimationFrame((t) => this.animate(t));
             }
 
             render(polyMatrix, cameraMatrix) {
                 const ctx = this.ctx;
+                if (!ctx) return;
+
                 const theme = CONFIG.themes[this.theme];
+                if (!theme) return;
 
                 // Clear with motion blur effect
                 ctx.fillStyle = `rgba(0, 0, 0, ${0.1 + (1 - this.trailLength) * 0.2})`;
                 ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
+                // Validate polyhedron exists
+                if (!this.polyhedron || !this.polyhedron.faces || !Array.isArray(this.polyhedron.faces)) {
+                    return;
+                }
+
                 // Collect all faces with their depths for sorting
                 const projectedFaces = [];
 
                 for (const face of this.polyhedron.faces) {
-                    const worldVerts = face.vertices.map(v => polyMatrix.transformPoint(v));
-                    const projVerts = worldVerts.map(v => this.project(v, cameraMatrix));
-                    const avgZ = projVerts.reduce((acc, v) => acc + v.z, 0) / projVerts.length;
+                    if (!face || !face.vertices || !face.normal) continue;
 
-                    // Calculate normal direction for back-face culling
-                    const worldNormal = polyMatrix.transformVector(face.normal);
-                    const cameraNormal = cameraMatrix.transformVector(worldNormal);
+                    try {
+                        const worldVerts = face.vertices.map(v => polyMatrix.transformPoint(v || new Vec3()));
+                        const projVerts = worldVerts.map(v => this.project(v, cameraMatrix));
 
-                    projectedFaces.push({
-                        verts: projVerts,
-                        worldVerts,
-                        avgZ,
-                        normal: cameraNormal,
-                        facing: cameraNormal.z
-                    });
+                        // Skip if no valid projected vertices
+                        if (projVerts.length < 3) continue;
+
+                        const avgZ = projVerts.reduce((acc, v) => acc + (v ? v.z : 0), 0) / projVerts.length;
+
+                        // Calculate normal direction for back-face culling
+                        const worldNormal = polyMatrix.transformVector(face.normal);
+                        const cameraNormal = cameraMatrix.transformVector(worldNormal);
+
+                        projectedFaces.push({
+                            verts: projVerts,
+                            worldVerts,
+                            avgZ: safeNum(avgZ),
+                            normal: cameraNormal,
+                            facing: cameraNormal ? cameraNormal.z : 0
+                        });
+                    } catch (e) {
+                        // Skip this face on error
+                        continue;
+                    }
                 }
 
                 // Sort by depth (back to front)
@@ -1132,6 +1497,8 @@
                 // Draw faces
                 for (const face of projectedFaces) {
                     const { verts, facing } = face;
+
+                    if (!verts || verts.length < 3) continue;
 
                     // Only draw front-facing faces with transparency for back faces
                     const alpha = facing > 0 ? 0.3 : 0.1;
@@ -1145,14 +1512,19 @@
                     ctx.closePath();
 
                     // Fill with gradient
-                    const gradient = ctx.createLinearGradient(
-                        verts[0].x, verts[0].y,
-                        verts[verts.length - 1].x, verts[verts.length - 1].y
-                    );
-                    gradient.addColorStop(0, this.hexToRgba(theme.primary, alpha * 0.5));
-                    gradient.addColorStop(1, this.hexToRgba(theme.secondary, alpha * 0.3));
-                    ctx.fillStyle = gradient;
-                    ctx.fill();
+                    try {
+                        const gradient = ctx.createLinearGradient(
+                            verts[0].x, verts[0].y,
+                            verts[verts.length - 1].x, verts[verts.length - 1].y
+                        );
+                        gradient.addColorStop(0, this.hexToRgba(theme.primary, alpha * 0.5));
+                        gradient.addColorStop(1, this.hexToRgba(theme.secondary, alpha * 0.3));
+                        ctx.fillStyle = gradient;
+                        ctx.fill();
+                    } catch (e) {
+                        ctx.fillStyle = this.hexToRgba(theme.primary, alpha * 0.5);
+                        ctx.fill();
+                    }
 
                     // Stroke edges with glow
                     ctx.strokeStyle = this.hexToRgba(theme.primary, strokeAlpha);
@@ -1164,127 +1536,174 @@
                 }
 
                 // Draw particles
-                for (const particle of this.particles) {
-                    const proj = this.project(particle.pos, cameraMatrix);
-                    if (proj.z > -this.cameraDistance) {
-                        const alpha = particle.life / particle.maxLife;
-                        const size = particle.size * proj.scale * alpha;
+                if (this.particles && Array.isArray(this.particles)) {
+                    for (const particle of this.particles) {
+                        if (!particle || !particle.pos) continue;
+
+                        const proj = this.project(particle.pos, cameraMatrix);
+                        if (proj.z > -this.cameraDistance) {
+                            const alpha = particle.life / particle.maxLife;
+                            const size = safeNum(particle.size * proj.scale * alpha, 1);
+
+                            ctx.beginPath();
+                            ctx.arc(proj.x, proj.y, Math.max(0.5, size), 0, Math.PI * 2);
+                            ctx.fillStyle = this.hexToRgba(particle.color, alpha);
+                            ctx.shadowColor = particle.color;
+                            ctx.shadowBlur = 10;
+                            ctx.fill();
+                            ctx.shadowBlur = 0;
+                        }
+                    }
+                }
+
+                // Draw ball trails and balls
+                if (this.balls && Array.isArray(this.balls)) {
+                    for (const ball of this.balls) {
+                        if (!ball || !ball.pos) continue;
+
+                        // Draw trail
+                        if (ball.trail && ball.trail.length > 1) {
+                            ctx.beginPath();
+                            const firstProj = this.project(ball.trail[0], cameraMatrix);
+                            ctx.moveTo(firstProj.x, firstProj.y);
+
+                            for (let i = 1; i < ball.trail.length; i++) {
+                                const proj = this.project(ball.trail[i], cameraMatrix);
+                                ctx.lineTo(proj.x, proj.y);
+                            }
+
+                            try {
+                                const lastProj = this.project(ball.trail[ball.trail.length - 1], cameraMatrix);
+                                const gradient = ctx.createLinearGradient(
+                                    firstProj.x, firstProj.y,
+                                    lastProj.x, lastProj.y
+                                );
+                                gradient.addColorStop(0, this.hexToRgba(ball.color, 0));
+                                gradient.addColorStop(1, this.hexToRgba(ball.color, 0.8));
+                                ctx.strokeStyle = gradient;
+                            } catch (e) {
+                                ctx.strokeStyle = this.hexToRgba(ball.color, 0.5);
+                            }
+                            ctx.lineWidth = 3;
+                            ctx.stroke();
+                        }
+
+                        // Draw ball with glow
+                        const ballProj = this.project(ball.pos, cameraMatrix);
+                        const ballSize = Math.max(1, safeNum(ball.radius * this.scale * ballProj.scale, 5));
+
+                        // Outer glow
+                        try {
+                            const glowSize = ballSize * 3 * safeNum(ball.glowIntensity, 1);
+                            const glowGradient = ctx.createRadialGradient(
+                                ballProj.x, ballProj.y, 0,
+                                ballProj.x, ballProj.y, Math.max(1, glowSize)
+                            );
+                            glowGradient.addColorStop(0, this.hexToRgba(ball.color, 0.5));
+                            glowGradient.addColorStop(0.5, this.hexToRgba(ball.color, 0.2));
+                            glowGradient.addColorStop(1, 'transparent');
+                            ctx.beginPath();
+                            ctx.arc(ballProj.x, ballProj.y, Math.max(1, glowSize), 0, Math.PI * 2);
+                            ctx.fillStyle = glowGradient;
+                            ctx.fill();
+                        } catch (e) {
+                            // Skip glow on error
+                        }
+
+                        // Ball body
+                        try {
+                            const bodyGradient = ctx.createRadialGradient(
+                                ballProj.x - ballSize * 0.3, ballProj.y - ballSize * 0.3, 0,
+                                ballProj.x, ballProj.y, ballSize
+                            );
+                            bodyGradient.addColorStop(0, '#ffffff');
+                            bodyGradient.addColorStop(0.3, ball.color);
+                            bodyGradient.addColorStop(1, this.hexToRgba(ball.color, 0.8));
+
+                            ctx.beginPath();
+                            ctx.arc(ballProj.x, ballProj.y, ballSize, 0, Math.PI * 2);
+                            ctx.fillStyle = bodyGradient;
+                            ctx.shadowColor = ball.color;
+                            ctx.shadowBlur = 20 * safeNum(ball.glowIntensity, 1);
+                            ctx.fill();
+                            ctx.shadowBlur = 0;
+                        } catch (e) {
+                            // Fallback simple ball
+                            ctx.beginPath();
+                            ctx.arc(ballProj.x, ballProj.y, ballSize, 0, Math.PI * 2);
+                            ctx.fillStyle = ball.color;
+                            ctx.fill();
+                        }
+
+                        // Specular highlight
+                        ctx.beginPath();
+                        ctx.arc(
+                            ballProj.x - ballSize * 0.3,
+                            ballProj.y - ballSize * 0.3,
+                            ballSize * 0.25,
+                            0, Math.PI * 2
+                        );
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                        ctx.fill();
+                    }
+                }
+
+                // Draw vertex points
+                if (this.polyhedron.vertices && Array.isArray(this.polyhedron.vertices)) {
+                    for (const vertex of this.polyhedron.vertices) {
+                        if (!vertex) continue;
+
+                        const worldVert = polyMatrix.transformPoint(vertex);
+                        const proj = this.project(worldVert, cameraMatrix);
 
                         ctx.beginPath();
-                        ctx.arc(proj.x, proj.y, size, 0, Math.PI * 2);
-                        ctx.fillStyle = this.hexToRgba(particle.color, alpha);
-                        ctx.shadowColor = particle.color;
+                        ctx.arc(proj.x, proj.y, Math.max(1, 3 * proj.scale), 0, Math.PI * 2);
+                        ctx.fillStyle = theme.accent;
+                        ctx.shadowColor = theme.accent;
                         ctx.shadowBlur = 10;
                         ctx.fill();
                         ctx.shadowBlur = 0;
                     }
                 }
-
-                // Draw ball trails and balls
-                for (const ball of this.balls) {
-                    // Draw trail
-                    if (ball.trail.length > 1) {
-                        ctx.beginPath();
-                        const firstProj = this.project(ball.trail[0], cameraMatrix);
-                        ctx.moveTo(firstProj.x, firstProj.y);
-
-                        for (let i = 1; i < ball.trail.length; i++) {
-                            const proj = this.project(ball.trail[i], cameraMatrix);
-                            ctx.lineTo(proj.x, proj.y);
-                        }
-
-                        const gradient = ctx.createLinearGradient(
-                            firstProj.x, firstProj.y,
-                            this.project(ball.trail[ball.trail.length - 1], cameraMatrix).x,
-                            this.project(ball.trail[ball.trail.length - 1], cameraMatrix).y
-                        );
-                        gradient.addColorStop(0, this.hexToRgba(ball.color, 0));
-                        gradient.addColorStop(1, this.hexToRgba(ball.color, 0.8));
-                        ctx.strokeStyle = gradient;
-                        ctx.lineWidth = 3;
-                        ctx.stroke();
-                    }
-
-                    // Draw ball with glow
-                    const ballProj = this.project(ball.pos, cameraMatrix);
-                    const ballSize = ball.radius * this.scale * ballProj.scale;
-
-                    // Outer glow
-                    const glowGradient = ctx.createRadialGradient(
-                        ballProj.x, ballProj.y, 0,
-                        ballProj.x, ballProj.y, ballSize * 3 * ball.glowIntensity
-                    );
-                    glowGradient.addColorStop(0, this.hexToRgba(ball.color, 0.5));
-                    glowGradient.addColorStop(0.5, this.hexToRgba(ball.color, 0.2));
-                    glowGradient.addColorStop(1, 'transparent');
-                    ctx.beginPath();
-                    ctx.arc(ballProj.x, ballProj.y, ballSize * 3 * ball.glowIntensity, 0, Math.PI * 2);
-                    ctx.fillStyle = glowGradient;
-                    ctx.fill();
-
-                    // Ball body
-                    const bodyGradient = ctx.createRadialGradient(
-                        ballProj.x - ballSize * 0.3, ballProj.y - ballSize * 0.3, 0,
-                        ballProj.x, ballProj.y, ballSize
-                    );
-                    bodyGradient.addColorStop(0, '#ffffff');
-                    bodyGradient.addColorStop(0.3, ball.color);
-                    bodyGradient.addColorStop(1, this.hexToRgba(ball.color, 0.8));
-
-                    ctx.beginPath();
-                    ctx.arc(ballProj.x, ballProj.y, ballSize, 0, Math.PI * 2);
-                    ctx.fillStyle = bodyGradient;
-                    ctx.shadowColor = ball.color;
-                    ctx.shadowBlur = 20 * ball.glowIntensity;
-                    ctx.fill();
-                    ctx.shadowBlur = 0;
-
-                    // Specular highlight
-                    ctx.beginPath();
-                    ctx.arc(
-                        ballProj.x - ballSize * 0.3,
-                        ballProj.y - ballSize * 0.3,
-                        ballSize * 0.25,
-                        0, Math.PI * 2
-                    );
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-                    ctx.fill();
-                }
-
-                // Draw vertex points
-                for (const vertex of this.polyhedron.vertices) {
-                    const worldVert = polyMatrix.transformPoint(vertex);
-                    const proj = this.project(worldVert, cameraMatrix);
-
-                    ctx.beginPath();
-                    ctx.arc(proj.x, proj.y, 3 * proj.scale, 0, Math.PI * 2);
-                    ctx.fillStyle = theme.accent;
-                    ctx.shadowColor = theme.accent;
-                    ctx.shadowBlur = 10;
-                    ctx.fill();
-                    ctx.shadowBlur = 0;
-                }
             }
 
             hexToRgba(hex, alpha) {
-                const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-                if (!result) {
-                    // Handle short hex or named colors
-                    if (hex.startsWith('#') && hex.length === 4) {
-                        const r = parseInt(hex[1] + hex[1], 16);
-                        const g = parseInt(hex[2] + hex[2], 16);
-                        const b = parseInt(hex[3] + hex[3], 16);
+                // Handle null/undefined
+                if (!hex || typeof hex !== 'string') {
+                    return `rgba(255, 255, 255, ${safeNum(alpha, 1)})`;
+                }
+
+                alpha = safeNum(alpha, 1);
+
+                // Handle full hex (#rrggbb)
+                const fullResult = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                if (fullResult) {
+                    return `rgba(${parseInt(fullResult[1], 16)}, ${parseInt(fullResult[2], 16)}, ${parseInt(fullResult[3], 16)}, ${alpha})`;
+                }
+
+                // Handle short hex (#rgb)
+                if (hex.startsWith('#') && hex.length === 4) {
+                    const r = parseInt(hex[1] + hex[1], 16);
+                    const g = parseInt(hex[2] + hex[2], 16);
+                    const b = parseInt(hex[3] + hex[3], 16);
+                    if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
                         return `rgba(${r}, ${g}, ${b}, ${alpha})`;
                     }
-                    return hex;
                 }
-                return `rgba(${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}, ${alpha})`;
+
+                // Handle named colors or return a default
+                // For safety, return a visible default color
+                return `rgba(200, 200, 200, ${alpha})`;
             }
         }
 
-        // Initialize on load
+        // Initialize on load with error handling
         window.addEventListener('DOMContentLoaded', () => {
-            new PolyhedronDemo();
+            try {
+                new PolyhedronDemo();
+            } catch (e) {
+                console.error('Failed to initialize PolyhedronDemo:', e);
+            }
         });
     </script>
 </body>
