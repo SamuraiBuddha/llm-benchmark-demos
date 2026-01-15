@@ -211,6 +211,14 @@
             font-weight: bold;
         }
 
+        .stat-warning {
+            color: #ffd93d;
+        }
+
+        .stat-danger {
+            color: #ff6b6b;
+        }
+
         .help {
             position: fixed;
             bottom: 10px;
@@ -407,8 +415,9 @@
 
     <div class="stats">
         <div>FPS: <span class="stat-value" id="fps">60</span></div>
-        <div>Particles: <span class="stat-value" id="particleCount">0</span></div>
-        <div>Pool: <span class="stat-value" id="poolSize">0</span></div>
+        <div>Particles: <span class="stat-value" id="particleCount">0</span> / <span id="maxParticles">2500</span></div>
+        <div>Pool Free: <span class="stat-value" id="poolFree">0</span></div>
+        <div>Memory: <span class="stat-value" id="memoryUsage">stable</span></div>
     </div>
 
     <div class="recording-indicator" id="recordingIndicator">Recording...</div>
@@ -422,8 +431,14 @@
     <script>
         // ============================================
         // SPECTACULAR PARTICLE SYSTEM & FIREWORKS
-        // High-performance engine with 10,000+ particles
+        // High-performance engine with stability fixes
         // ============================================
+
+        // === PERFORMANCE CONSTANTS ===
+        const MAX_ACTIVE_PARTICLES = 2500;  // Hard cap on active particles
+        const POOL_SIZE = 3000;             // Reduced pool size for efficiency
+        const BUDGET_THRESHOLD = 2000;      // Start throttling at this count
+        const CLEANUP_INTERVAL = 1000;      // Memory cleanup every 1s
 
         // Canvas setup with double buffering
         const canvas = document.getElementById('canvas');
@@ -451,6 +466,7 @@
         let frameCount = 0;
         let fps = 60;
         let fpsUpdateTime = 0;
+        let lastCleanupTime = 0;
 
         // State
         let paused = false;
@@ -464,6 +480,7 @@
         let audioAnalyser = null;
         let audioData = null;
         let presetIntervals = [];
+        let rocketIntervals = [];  // Track rocket trail intervals for cleanup
 
         // Physics settings
         let physics = {
@@ -483,16 +500,18 @@
 
         // ============================================
         // HIGH-PERFORMANCE PARTICLE POOL
-        // Object pooling for zero garbage collection
+        // Object pooling with proper recycling
         // ============================================
-        const POOL_SIZE = 25000;
-        const particlePool = new Array(POOL_SIZE);
+
+        // Use a Set for O(1) active particle tracking
+        const particlePool = [];
         const activeParticles = [];
-        let poolIndex = 0;
+        const freeList = [];  // Free particle indices for O(1) allocation
 
         // Particle structure (optimized flat object)
         class Particle {
-            constructor() {
+            constructor(index) {
+                this.poolIndex = index;
                 this.x = 0;
                 this.y = 0;
                 this.vx = 0;
@@ -528,6 +547,7 @@
                 this.isRocket = false;
                 this.pattern = null;
                 this.explodeY = 0;
+                this.rocketIntervalId = null;  // Track associated interval
             }
 
             reset() {
@@ -559,6 +579,11 @@
                 this.isRocket = false;
                 this.pattern = null;
                 this.explodeY = 0;
+                // Clean up any associated interval
+                if (this.rocketIntervalId !== null) {
+                    clearInterval(this.rocketIntervalId);
+                    this.rocketIntervalId = null;
+                }
             }
 
             init(x, y, vx, vy, options = {}) {
@@ -588,6 +613,7 @@
                 this.isRocket = false;
                 this.pattern = null;
                 this.explodeY = 0;
+                this.rocketIntervalId = null;
 
                 // Parse color
                 const color = options.color || appearance.colors[Math.floor(Math.random() * appearance.colors.length)];
@@ -690,14 +716,16 @@
                         break;
                 }
 
-                // Check for secondary explosion
+                // Check for secondary explosion (with budget check)
                 if (this.willExplode && this.life <= 0.3 && this.life > 0.25) {
-                    createSecondaryExplosion(this.x, this.y, this.explodePattern);
+                    if (canCreateParticles(8)) {  // Budget check for secondary explosions
+                        createSecondaryExplosion(this.x, this.y, this.explodePattern);
+                    }
                     this.willExplode = false;
                 }
 
-                // Deactivate if dead
-                if (this.life <= 0) {
+                // Deactivate if dead or out of bounds
+                if (this.life <= 0 || this.x < -100 || this.x > W + 100 || this.y > H + 100) {
                     this.active = false;
                 }
 
@@ -909,34 +937,62 @@
 
         // Initialize particle pool
         for (let i = 0; i < POOL_SIZE; i++) {
-            particlePool[i] = new Particle();
+            particlePool[i] = new Particle(i);
+            freeList.push(i);
         }
 
-        // Get particle from pool (optimized)
+        // === BUDGET MANAGEMENT ===
+        function canCreateParticles(count) {
+            return activeParticles.length + count <= MAX_ACTIVE_PARTICLES;
+        }
+
+        function getAvailableBudget() {
+            return Math.max(0, MAX_ACTIVE_PARTICLES - activeParticles.length);
+        }
+
+        function isThrottled() {
+            return activeParticles.length >= BUDGET_THRESHOLD;
+        }
+
+        // Get particle from pool (optimized with free list)
         function getParticle() {
-            // Fast path: check next in sequence
-            for (let i = 0; i < POOL_SIZE; i++) {
-                const idx = (poolIndex + i) % POOL_SIZE;
-                if (!particlePool[idx].active) {
-                    poolIndex = (idx + 1) % POOL_SIZE;
-                    particlePool[idx].reset();
-                    return particlePool[idx];
-                }
+            // Check hard cap first
+            if (activeParticles.length >= MAX_ACTIVE_PARTICLES) {
+                return null;
             }
-            // Pool exhausted - reuse oldest
-            if (activeParticles.length > 0) {
-                const oldest = activeParticles[0];
-                oldest.reset();
-                return oldest;
+
+            // Try to get from free list
+            if (freeList.length > 0) {
+                const idx = freeList.pop();
+                const p = particlePool[idx];
+                p.reset();
+                return p;
             }
+
+            // Pool exhausted - cannot create more
             return null;
         }
 
-        // Emit particles
+        // Return particle to pool
+        function returnParticle(particle) {
+            if (particle && particle.poolIndex !== undefined) {
+                particle.reset();
+                particle.active = false;
+                freeList.push(particle.poolIndex);
+            }
+        }
+
+        // Emit particles with budget checking
         function emit(x, y, count = 1, options = {}) {
-            for (let i = 0; i < count; i++) {
+            // Apply budget limiting
+            const available = getAvailableBudget();
+            const actualCount = Math.min(count, available);
+
+            if (actualCount <= 0) return;
+
+            for (let i = 0; i < actualCount; i++) {
                 const p = getParticle();
-                if (!p) continue;
+                if (!p) break;  // Pool exhausted
 
                 let px = x, py = y;
 
@@ -975,9 +1031,13 @@
 
         // ============================================
         // SPECTACULAR FIREWORK PATTERNS
+        // With budget-aware particle counts
         // ============================================
 
         function launchFirework(pattern, x, y) {
+            // Check if we have budget for a firework
+            if (!canCreateParticles(50)) return;  // Reserve at least 50 for explosion
+
             const fx = x !== undefined ? x : Math.random() * W * 0.8 + W * 0.1;
             const fy = y !== undefined ? y : H;
             const targetY = H * (0.15 + Math.random() * 0.35);
@@ -998,37 +1058,51 @@
                 rocket.explodeY = targetY;
                 activeParticles.push(rocket);
 
-                // Rocket trail sparks
+                // Rocket trail sparks with proper cleanup
+                const rocketRef = rocket;
                 const sparkInterval = setInterval(() => {
-                    if (!rocket.active || rocket.y <= rocket.explodeY) {
+                    if (!rocketRef.active || rocketRef.y <= rocketRef.explodeY) {
                         clearInterval(sparkInterval);
+                        // Remove from tracking
+                        const idx = rocketIntervals.indexOf(sparkInterval);
+                        if (idx > -1) rocketIntervals.splice(idx, 1);
                         return;
                     }
-                    emit(rocket.x, rocket.y, 2, {
-                        type: 'spark',
-                        size: 2,
-                        life: 0.3,
-                        speed: 1,
-                        spread: Math.PI * 0.5,
-                        angle: Math.PI / 2,
-                        color: '#ffa500',
-                        glow: true,
-                        trailLength: 3
-                    });
+                    // Only emit if budget allows
+                    if (canCreateParticles(2)) {
+                        emit(rocketRef.x, rocketRef.y, 2, {
+                            type: 'spark',
+                            size: 2,
+                            life: 0.3,
+                            speed: 1,
+                            spread: Math.PI * 0.5,
+                            angle: Math.PI / 2,
+                            color: '#ffa500',
+                            glow: true,
+                            trailLength: 3
+                        });
+                    }
                 }, 30);
+                rocket.rocketIntervalId = sparkInterval;
+                rocketIntervals.push(sparkInterval);
             }
         }
 
         function explodeFirework(x, y, pattern) {
             const colors = appearance.colors;
             const color = colors[Math.floor(Math.random() * colors.length)];
-            const count = 180;
+
+            // Dynamic particle count based on available budget
+            const budget = getAvailableBudget();
+            const baseCount = Math.min(120, Math.floor(budget * 0.6));  // Use at most 60% of budget
+
+            if (baseCount < 20) return;  // Not enough budget for a good explosion
 
             switch (pattern) {
                 case 'peony':
                     // Classic spherical burst
-                    for (let i = 0; i < count; i++) {
-                        const angle = (Math.PI * 2 / count) * i;
+                    for (let i = 0; i < baseCount; i++) {
+                        const angle = (Math.PI * 2 / baseCount) * i;
                         const speed = 5 + Math.random() * 3;
                         emit(x, y, 1, {
                             type: 'spark',
@@ -1047,8 +1121,9 @@
 
                 case 'chrysanthemum':
                     // Dense with long trails
-                    for (let i = 0; i < count * 2; i++) {
-                        const angle = (Math.PI * 2 / count) * i;
+                    const chrysCount = Math.min(baseCount * 1.5, budget);
+                    for (let i = 0; i < chrysCount; i++) {
+                        const angle = (Math.PI * 2 / baseCount) * i;
                         const speed = 2 + Math.random() * 5;
                         emit(x, y, 1, {
                             type: 'spark',
@@ -1066,8 +1141,8 @@
 
                 case 'willow':
                     // Long falling trails like willow branches
-                    for (let i = 0; i < count; i++) {
-                        const angle = (Math.PI * 2 / count) * i;
+                    for (let i = 0; i < baseCount; i++) {
+                        const angle = (Math.PI * 2 / baseCount) * i;
                         emit(x, y, 1, {
                             type: 'spark',
                             size: 2.5,
@@ -1083,9 +1158,10 @@
 
                 case 'palm':
                     // Rising then falling like palm fronds
-                    for (let i = 0; i < 15; i++) {
-                        const baseAngle = (Math.PI * 2 / 15) * i;
-                        for (let j = 0; j < 18; j++) {
+                    const palmArms = Math.min(12, Math.floor(baseCount / 15));
+                    for (let i = 0; i < palmArms; i++) {
+                        const baseAngle = (Math.PI * 2 / palmArms) * i;
+                        for (let j = 0; j < 15; j++) {
                             const angle = baseAngle + (Math.random() - 0.5) * 0.25;
                             const speed = 3 + j * 0.35;
                             emit(x, y, 1, {
@@ -1104,8 +1180,8 @@
 
                 case 'ring':
                     // Perfect circle
-                    for (let i = 0; i < count; i++) {
-                        const angle = (Math.PI * 2 / count) * i;
+                    for (let i = 0; i < baseCount; i++) {
+                        const angle = (Math.PI * 2 / baseCount) * i;
                         emit(x, y, 1, {
                             type: 'spark',
                             size: 4,
@@ -1117,27 +1193,31 @@
                             trailLength: 8
                         });
                     }
-                    // Inner ring
+                    // Inner ring (delayed, with budget check)
                     setTimeout(() => {
-                        for (let i = 0; i < count / 2; i++) {
-                            const angle = (Math.PI * 2 / (count / 2)) * i;
-                            emit(x, y, 1, {
-                                type: 'spark',
-                                size: 3,
-                                life: 1.2,
-                                color: colors[(colors.indexOf(color) + 1) % colors.length],
-                                speed: 4,
-                                angle: angle,
-                                spread: 0,
-                                trailLength: 6
-                            });
+                        if (canCreateParticles(baseCount / 2)) {
+                            for (let i = 0; i < baseCount / 2; i++) {
+                                const angle = (Math.PI * 2 / (baseCount / 2)) * i;
+                                emit(x, y, 1, {
+                                    type: 'spark',
+                                    size: 3,
+                                    life: 1.2,
+                                    color: colors[(colors.indexOf(color) + 1) % colors.length],
+                                    speed: 4,
+                                    angle: angle,
+                                    spread: 0,
+                                    trailLength: 6
+                                });
+                            }
                         }
                     }, 100);
                     break;
 
                 case 'heart':
                     // Heart shape
-                    for (let t = 0; t < Math.PI * 2; t += 0.05) {
+                    const heartSteps = Math.min(80, baseCount);
+                    for (let i = 0; i < heartSteps; i++) {
+                        const t = (i / heartSteps) * Math.PI * 2;
                         const hx = 16 * Math.pow(Math.sin(t), 3);
                         const hy = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
                         const angle = Math.atan2(hy, hx);
@@ -1157,9 +1237,11 @@
 
                 case 'star':
                     // Five-pointed star
-                    for (let i = 0; i < 5; i++) {
-                        const baseAngle = (Math.PI * 2 / 5) * i - Math.PI / 2;
-                        for (let j = 0; j < 25; j++) {
+                    const starPoints = 5;
+                    const perPoint = Math.floor(baseCount / starPoints);
+                    for (let i = 0; i < starPoints; i++) {
+                        const baseAngle = (Math.PI * 2 / starPoints) * i - Math.PI / 2;
+                        for (let j = 0; j < perPoint; j++) {
                             emit(x, y, 1, {
                                 type: 'spark',
                                 size: 3.5,
@@ -1176,14 +1258,15 @@
 
                 case 'spiral':
                     // Rotating spiral
-                    for (let i = 0; i < count * 2; i++) {
-                        const angle = (i / count) * Math.PI * 10;
-                        const speed = 1 + (i / count) * 6;
+                    const spiralCount = Math.min(baseCount * 1.5, budget);
+                    for (let i = 0; i < spiralCount; i++) {
+                        const angle = (i / baseCount) * Math.PI * 10;
+                        const speed = 1 + (i / baseCount) * 6;
                         emit(x, y, 1, {
                             type: 'magic',
                             size: 3,
                             life: 2.5,
-                            hue: (i / count) * 360,
+                            hue: (i / baseCount) * 360,
                             speed: speed,
                             angle: angle,
                             spread: 0,
@@ -1193,9 +1276,10 @@
                     break;
 
                 case 'crossette':
-                    // Explodes into secondary explosions
-                    for (let i = 0; i < 30; i++) {
-                        const angle = (Math.PI * 2 / 30) * i;
+                    // Explodes into secondary explosions (limited count)
+                    const crossetteCount = Math.min(20, Math.floor(baseCount / 3));
+                    for (let i = 0; i < crossetteCount; i++) {
+                        const angle = (Math.PI * 2 / crossetteCount) * i;
                         const speed = 5 + Math.random() * 2;
                         emit(x, y, 1, {
                             type: 'spark',
@@ -1213,9 +1297,10 @@
                     break;
 
                 case 'kamuro':
-                    // Dense golden waterfall
-                    for (let i = 0; i < count * 3; i++) {
-                        const angle = (Math.PI * 2 / count) * (i % count);
+                    // Dense golden waterfall (reduced count)
+                    const kamuroCount = Math.min(baseCount * 2, budget);
+                    for (let i = 0; i < kamuroCount; i++) {
+                        const angle = (Math.PI * 2 / baseCount) * (i % baseCount);
                         const speed = 1 + Math.random() * 3;
                         emit(x, y, 1, {
                             type: 'spark',
@@ -1234,28 +1319,30 @@
             // Screen flash
             flashScreen(color);
 
-            // Crackle effect for some patterns
+            // Crackle effect for some patterns (with budget check)
             if (['peony', 'chrysanthemum', 'crossette'].includes(pattern)) {
                 setTimeout(() => {
-                    for (let i = 0; i < 30; i++) {
-                        emit(x + (Math.random() - 0.5) * 100, y + (Math.random() - 0.5) * 100, 1, {
-                            type: 'spark',
-                            size: 2,
-                            life: 0.3,
-                            color: '#fff',
-                            speed: 2,
-                            spread: Math.PI * 2,
-                            trailLength: 2
-                        });
+                    if (canCreateParticles(20)) {
+                        for (let i = 0; i < 20; i++) {
+                            emit(x + (Math.random() - 0.5) * 100, y + (Math.random() - 0.5) * 100, 1, {
+                                type: 'spark',
+                                size: 2,
+                                life: 0.3,
+                                color: '#fff',
+                                speed: 2,
+                                spread: Math.PI * 2,
+                                trailLength: 2
+                            });
+                        }
                     }
                 }, 300);
             }
         }
 
         function createSecondaryExplosion(x, y, pattern) {
-            if (pattern === 'mini') {
-                for (let i = 0; i < 12; i++) {
-                    const angle = (Math.PI * 2 / 12) * i;
+            if (pattern === 'mini' && canCreateParticles(8)) {
+                for (let i = 0; i < 8; i++) {
+                    const angle = (Math.PI * 2 / 8) * i;
                     emit(x, y, 1, {
                         type: 'spark',
                         size: 2,
@@ -1297,6 +1384,11 @@
             presetIntervals = [];
         }
 
+        function clearRocketIntervals() {
+            rocketIntervals.forEach(id => clearInterval(id));
+            rocketIntervals = [];
+        }
+
         const presets = {
             fireworks: () => {
                 physics.gravity = 0.1;
@@ -1322,9 +1414,9 @@
                 autoShow = false;
 
                 const id = setInterval(() => {
-                    if (particleType === 'fire' && !paused) {
+                    if (particleType === 'fire' && !paused && canCreateParticles(6)) {
                         // Fire
-                        emit(W/2, H - 30, 4, {
+                        emit(W/2, H - 30, 3, {
                             type: 'fire',
                             angle: -Math.PI/2,
                             spread: 0.6,
@@ -1333,7 +1425,7 @@
                             size: 12
                         });
                         // Embers
-                        if (Math.random() < 0.3) {
+                        if (Math.random() < 0.3 && canCreateParticles(1)) {
                             emit(W/2 + (Math.random() - 0.5) * 60, H - 40, 1, {
                                 type: 'spark',
                                 angle: -Math.PI/2,
@@ -1345,16 +1437,18 @@
                             });
                         }
                         // Smoke
-                        emit(W/2, H - 80, 1, {
-                            type: 'smoke',
-                            angle: -Math.PI/2,
-                            spread: 0.4,
-                            speed: 1.5,
-                            life: 4,
-                            size: 20
-                        });
+                        if (canCreateParticles(1)) {
+                            emit(W/2, H - 80, 1, {
+                                type: 'smoke',
+                                angle: -Math.PI/2,
+                                spread: 0.4,
+                                speed: 1.5,
+                                life: 4,
+                                size: 20
+                            });
+                        }
                     }
-                }, 40);
+                }, 50);
                 presetIntervals.push(id);
             },
 
@@ -1370,8 +1464,8 @@
                 autoShow = false;
 
                 const id = setInterval(() => {
-                    if (particleType === 'water' && !paused) {
-                        emit(W/2, 30, 8, {
+                    if (particleType === 'water' && !paused && canCreateParticles(6)) {
+                        emit(W/2, 30, 6, {
                             type: 'water',
                             angle: Math.PI/2,
                             spread: 0.4,
@@ -1380,7 +1474,7 @@
                             size: 5
                         });
                         // Mist
-                        if (Math.random() < 0.2) {
+                        if (Math.random() < 0.15 && canCreateParticles(2)) {
                             emit(W/2 + (Math.random() - 0.5) * 150, H - 100, 2, {
                                 type: 'smoke',
                                 angle: -Math.PI/2,
@@ -1392,7 +1486,7 @@
                             });
                         }
                     }
-                }, 25);
+                }, 35);
                 presetIntervals.push(id);
             },
 
@@ -1407,15 +1501,18 @@
                 particleType = 'magic';
                 autoShow = false;
 
-                // Create spiral galaxy
+                // Create spiral galaxy (limited count)
+                const maxGalaxyParticles = Math.min(400, getAvailableBudget());
+                const particlesPerArm = Math.floor(maxGalaxyParticles / 3.5);
+
                 for (let arm = 0; arm < 3; arm++) {
                     const armOffset = (Math.PI * 2 / 3) * arm;
-                    for (let i = 0; i < 200; i++) {
-                        const angle = armOffset + (i / 200) * Math.PI * 4;
-                        const dist = 30 + (i / 200) * 350;
-                        const x = W/2 + Math.cos(angle) * dist + (Math.random() - 0.5) * 30;
-                        const y = H/2 + Math.sin(angle) * dist * 0.35 + (Math.random() - 0.5) * 20;
-                        emit(x, y, 1, {
+                    for (let i = 0; i < particlesPerArm; i++) {
+                        const angle = armOffset + (i / particlesPerArm) * Math.PI * 4;
+                        const dist = 30 + (i / particlesPerArm) * 350;
+                        const gx = W/2 + Math.cos(angle) * dist + (Math.random() - 0.5) * 30;
+                        const gy = H/2 + Math.sin(angle) * dist * 0.35 + (Math.random() - 0.5) * 20;
+                        emit(gx, gy, 1, {
                             type: 'magic',
                             speed: 0.3,
                             angle: angle + Math.PI/2,
@@ -1428,7 +1525,8 @@
                 }
 
                 // Central glow
-                for (let i = 0; i < 100; i++) {
+                const centerCount = Math.min(50, getAvailableBudget());
+                for (let i = 0; i < centerCount; i++) {
                     const angle = Math.random() * Math.PI * 2;
                     const dist = Math.random() * 50;
                     emit(W/2 + Math.cos(angle) * dist, H/2 + Math.sin(angle) * dist * 0.5, 1, {
@@ -1454,9 +1552,9 @@
                 autoShow = false;
 
                 const id = setInterval(() => {
-                    if (particleType === 'magic' && !paused) {
-                        const x = Math.random() * W;
-                        emit(x, 30 + Math.random() * 50, 3, {
+                    if (particleType === 'magic' && !paused && canCreateParticles(2)) {
+                        const ax = Math.random() * W;
+                        emit(ax, 30 + Math.random() * 50, 2, {
                             type: 'magic',
                             angle: Math.PI/2,
                             spread: 0.4,
@@ -1466,7 +1564,7 @@
                             hue: 100 + Math.random() * 200
                         });
                     }
-                }, 80);
+                }, 100);
                 presetIntervals.push(id);
             },
 
@@ -1481,8 +1579,8 @@
                 autoShow = false;
 
                 const id = setInterval(() => {
-                    if (particleType === 'water' && !paused) {
-                        for (let i = 0; i < 5; i++) {
+                    if (particleType === 'water' && !paused && canCreateParticles(4)) {
+                        for (let i = 0; i < 4; i++) {
                             emit(Math.random() * W * 1.2 - W * 0.1, -10, 1, {
                                 type: 'water',
                                 angle: Math.PI/2 + 0.15,
@@ -1494,7 +1592,7 @@
                             });
                         }
                     }
-                }, 15);
+                }, 20);
                 presetIntervals.push(id);
             },
 
@@ -1509,7 +1607,7 @@
                 autoShow = false;
 
                 const id = setInterval(() => {
-                    if (particleType === 'snow' && !paused) {
+                    if (particleType === 'snow' && !paused && canCreateParticles(2)) {
                         emit(Math.random() * W, -20, 2, {
                             type: 'snow',
                             angle: Math.PI/2,
@@ -1519,7 +1617,7 @@
                             size: 5 + Math.random() * 6
                         });
                     }
-                }, 80);
+                }, 100);
                 presetIntervals.push(id);
             },
 
@@ -1533,18 +1631,21 @@
                 particleType = 'confetti';
                 autoShow = false;
 
-                // Celebration burst
-                for (let i = 0; i < 300; i++) {
+                // Celebration burst (limited count)
+                const confettiCount = Math.min(200, getAvailableBudget());
+                for (let i = 0; i < confettiCount; i++) {
                     setTimeout(() => {
-                        emit(W/2 + (Math.random() - 0.5) * 200, H/3, 1, {
-                            type: 'confetti',
-                            angle: -Math.PI/2,
-                            spread: Math.PI * 1.2,
-                            speed: 10 + Math.random() * 5,
-                            life: 6,
-                            size: 10 + Math.random() * 10
-                        });
-                    }, i * 5);
+                        if (canCreateParticles(1)) {
+                            emit(W/2 + (Math.random() - 0.5) * 200, H/3, 1, {
+                                type: 'confetti',
+                                angle: -Math.PI/2,
+                                spread: Math.PI * 1.2,
+                                speed: 10 + Math.random() * 5,
+                                life: 6,
+                                size: 10 + Math.random() * 10
+                            });
+                        }
+                    }, i * 8);
                 }
             },
 
@@ -1571,7 +1672,7 @@
                 autoShow = false;
 
                 const id = setInterval(() => {
-                    if (!paused) {
+                    if (!paused && canCreateParticles(1)) {
                         emit(Math.random() * W, -10, 1, {
                             type: 'spark',
                             angle: Math.PI/2,
@@ -1583,7 +1684,7 @@
                             glow: true
                         });
                     }
-                }, 25);
+                }, 30);
                 presetIntervals.push(id);
             }
         };
@@ -1591,6 +1692,7 @@
         function setPreset(name) {
             clearParticles();
             clearPresetIntervals();
+            clearRocketIntervals();
             autoShow = false;
             presets[name]();
             updateUI();
@@ -1675,25 +1777,29 @@
         function handleInteraction(x, y, isClick) {
             switch (interactionMode) {
                 case 'emit':
-                    const count = isClick ? 20 : 5;
-                    emit(x, y, count, {
-                        speed: 4,
-                        spread: Math.PI * 0.6,
-                        angle: -Math.PI / 2,
-                        life: 1.5
-                    });
+                    const count = isClick ? 15 : 4;
+                    if (canCreateParticles(count)) {
+                        emit(x, y, count, {
+                            speed: 4,
+                            spread: Math.PI * 0.6,
+                            angle: -Math.PI / 2,
+                            life: 1.5
+                        });
+                    }
                     break;
                 case 'attract':
                 case 'repel':
                     // Handled in update loop
                     break;
                 case 'paint':
-                    emit(x, y, 8, {
-                        speed: 0.8,
-                        spread: Math.PI * 2,
-                        life: 3,
-                        size: appearance.size * 1.5
-                    });
+                    if (canCreateParticles(6)) {
+                        emit(x, y, 6, {
+                            speed: 0.8,
+                            spread: Math.PI * 2,
+                            life: 3,
+                            size: appearance.size * 1.5
+                        });
+                    }
                     break;
             }
         }
@@ -1712,7 +1818,7 @@
             lastTime = timestamp;
 
             if (!paused) {
-                // Update particles
+                // Update particles and remove dead ones
                 for (let i = activeParticles.length - 1; i >= 0; i--) {
                     const p = activeParticles[i];
 
@@ -1750,16 +1856,28 @@
 
                     p.update(dt);
 
+                    // Remove dead particles and return to pool
                     if (!p.active) {
                         activeParticles.splice(i, 1);
+                        returnParticle(p);
                     }
                 }
 
-                // Auto firework show
-                if (autoShow && Math.random() < 0.025) {
+                // Auto firework show (with throttling)
+                if (autoShow && !isThrottled() && Math.random() < 0.02) {
                     const patterns = ['peony', 'chrysanthemum', 'willow', 'palm', 'ring', 'heart', 'star', 'spiral', 'crossette', 'kamuro'];
                     launchFirework(patterns[Math.floor(Math.random() * patterns.length)]);
                 }
+            }
+
+            // Periodic cleanup check
+            if (timestamp - lastCleanupTime > CLEANUP_INTERVAL) {
+                lastCleanupTime = timestamp;
+                // Force cleanup of any orphaned intervals
+                rocketIntervals = rocketIntervals.filter(id => {
+                    // Keep only active intervals
+                    return true; // Intervals auto-remove themselves
+                });
             }
 
             // FPS calculation
@@ -1770,10 +1888,36 @@
                 fpsUpdateTime = timestamp;
             }
 
-            // Update stats
+            // Update stats display
+            const countEl = document.getElementById('particleCount');
+            const count = activeParticles.length;
+            countEl.textContent = count;
+
+            // Color code particle count
+            countEl.className = 'stat-value';
+            if (count > BUDGET_THRESHOLD) {
+                countEl.classList.add('stat-warning');
+            }
+            if (count > MAX_ACTIVE_PARTICLES * 0.9) {
+                countEl.classList.add('stat-danger');
+            }
+
             document.getElementById('fps').textContent = fps;
-            document.getElementById('particleCount').textContent = activeParticles.length;
-            document.getElementById('poolSize').textContent = POOL_SIZE;
+            document.getElementById('maxParticles').textContent = MAX_ACTIVE_PARTICLES;
+            document.getElementById('poolFree').textContent = freeList.length;
+
+            // Memory status indicator
+            const memEl = document.getElementById('memoryUsage');
+            if (freeList.length < 100) {
+                memEl.textContent = 'low';
+                memEl.className = 'stat-value stat-warning';
+            } else if (freeList.length < 500) {
+                memEl.textContent = 'moderate';
+                memEl.className = 'stat-value';
+            } else {
+                memEl.textContent = 'stable';
+                memEl.className = 'stat-value';
+            }
         }
 
         function render() {
@@ -1876,10 +2020,14 @@
         }
 
         function clearParticles() {
-            for (let i = 0; i < activeParticles.length; i++) {
-                activeParticles[i].active = false;
+            // Return all particles to pool
+            for (let i = activeParticles.length - 1; i >= 0; i--) {
+                returnParticle(activeParticles[i]);
             }
             activeParticles.length = 0;
+
+            // Clear all intervals
+            clearRocketIntervals();
         }
 
         function togglePause() {
@@ -2000,7 +2148,8 @@
         // Create some immediate visible particles on load
         function createInitialParticles() {
             // Emit a burst of particles in the center
-            for (let i = 0; i < 50; i++) {
+            const initialCount = Math.min(40, getAvailableBudget());
+            for (let i = 0; i < initialCount; i++) {
                 emit(W / 2, H / 2, 1, {
                     type: 'spark',
                     speed: 3 + Math.random() * 4,
@@ -2015,11 +2164,11 @@
         // Call immediately to show particles right away
         createInitialParticles();
 
-        // Start with a spectacular firework show after a short delay
+        // Start with a modest firework show after a short delay
         setTimeout(() => {
-            const patterns = ['peony', 'chrysanthemum', 'heart', 'star', 'spiral'];
+            const patterns = ['peony', 'chrysanthemum', 'heart'];
             patterns.forEach((pattern, i) => {
-                setTimeout(() => launchFirework(pattern), i * 600);
+                setTimeout(() => launchFirework(pattern), i * 800);
             });
         }, 300);
 
