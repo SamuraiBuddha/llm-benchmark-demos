@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DVD Logo Bounce</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #000;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            color: #fff;
+            overflow: hidden;
+        }
+        h1 {
+            position: fixed;
+            top: 20px;
+            font-size: 1.2rem;
+            opacity: 0.5;
+            z-index: 100;
+        }
+        canvas {
+            display: block;
+        }
+        .stats {
+            position: fixed;
+            bottom: 20px;
+            display: flex;
+            gap: 30px;
+            font-size: 1rem;
+            z-index: 100;
+        }
+        .stat {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #ff0;
+        }
+        .stat-label {
+            opacity: 0.7;
+            font-size: 0.8rem;
+        }
+        .corner-flash {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 4rem;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 0 0 50px currentColor;
+            opacity: 0;
+            transition: opacity 0.1s;
+            pointer-events: none;
+            z-index: 1000;
+        }
+        .corner-flash.show {
+            opacity: 1;
+            animation: flash 0.5s ease-out;
+        }
+        @keyframes flash {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <h1>DVD Logo Bounce - Watch for Corner Hits!</h1>
+    <canvas id="canvas"></canvas>
+    <div class="corner-flash" id="flash">CORNER!</div>
+    <div class="stats">
+        <div class="stat">
+            <div class="stat-value" id="bounces">0</div>
+            <div class="stat-label">Bounces</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" id="corners">0</div>
+            <div class="stat-label">Corner Hits</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" id="time">0:00</div>
+            <div class="stat-label">Time</div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const flash = document.getElementById('flash');
+
+        let W, H;
+        function resize() {
+            W = canvas.width = window.innerWidth;
+            H = canvas.height = window.innerHeight;
+        }
+        resize();
+        window.addEventListener('resize', resize);
+
+        // Stats
+        let bounces = 0;
+        let corners = 0;
+        let startTime = Date.now();
+
+        // Colors for the DVD logo
+        const colors = [
+            '#ff0000', '#ff7700', '#ffff00', '#00ff00',
+            '#00ffff', '#0077ff', '#7700ff', '#ff00ff'
+        ];
+        let colorIndex = 0;
+
+        // DVD Logo
+        const logo = {
+            x: W / 2,
+            y: H / 2,
+            width: 150,
+            height: 75,
+            vx: 3,
+            vy: 2,
+            color: colors[0],
+            trail: []
+        };
+
+        // Draw DVD text
+        function drawDVDLogo(x, y, color, scale = 1) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(scale, scale);
+
+            // Glow effect
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 20;
+
+            // DVD text
+            ctx.font = 'bold 48px Arial';
+            ctx.fillStyle = color;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('DVD', 0, -10);
+
+            // Video text
+            ctx.font = 'bold 18px Arial';
+            ctx.fillText('VIDEO', 0, 20);
+
+            ctx.restore();
+        }
+
+        function changeColor() {
+            colorIndex = (colorIndex + 1) % colors.length;
+            logo.color = colors[colorIndex];
+        }
+
+        function checkCornerHit() {
+            const margin = 10;
+            const hitLeft = logo.x - logo.width/2 <= margin;
+            const hitRight = logo.x + logo.width/2 >= W - margin;
+            const hitTop = logo.y - logo.height/2 <= margin;
+            const hitBottom = logo.y + logo.height/2 >= H - margin;
+
+            if ((hitLeft || hitRight) && (hitTop || hitBottom)) {
+                corners++;
+                document.getElementById('corners').textContent = corners;
+                flash.style.color = logo.color;
+                flash.classList.add('show');
+                setTimeout(() => flash.classList.remove('show'), 500);
+
+                // Extra color changes for corner
+                changeColor();
+                changeColor();
+                return true;
+            }
+            return false;
+        }
+
+        function update() {
+            logo.x += logo.vx;
+            logo.y += logo.vy;
+
+            let bounced = false;
+
+            // Bounce off walls
+            if (logo.x - logo.width/2 <= 0) {
+                logo.x = logo.width/2;
+                logo.vx = Math.abs(logo.vx);
+                bounced = true;
+            }
+            if (logo.x + logo.width/2 >= W) {
+                logo.x = W - logo.width/2;
+                logo.vx = -Math.abs(logo.vx);
+                bounced = true;
+            }
+            if (logo.y - logo.height/2 <= 0) {
+                logo.y = logo.height/2;
+                logo.vy = Math.abs(logo.vy);
+                bounced = true;
+            }
+            if (logo.y + logo.height/2 >= H) {
+                logo.y = H - logo.height/2;
+                logo.vy = -Math.abs(logo.vy);
+                bounced = true;
+            }
+
+            if (bounced) {
+                bounces++;
+                document.getElementById('bounces').textContent = bounces;
+                if (!checkCornerHit()) {
+                    changeColor();
+                }
+            }
+
+            // Update trail
+            logo.trail.push({ x: logo.x, y: logo.y, color: logo.color });
+            if (logo.trail.length > 20) logo.trail.shift();
+
+            // Update time
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const mins = Math.floor(elapsed / 60);
+            const secs = elapsed % 60;
+            document.getElementById('time').textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function draw() {
+            // Fade effect
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.fillRect(0, 0, W, H);
+
+            update();
+
+            // Draw trail
+            for (let i = 0; i < logo.trail.length; i++) {
+                const t = logo.trail[i];
+                const alpha = i / logo.trail.length * 0.3;
+                const scale = 0.5 + (i / logo.trail.length) * 0.5;
+                ctx.globalAlpha = alpha;
+                drawDVDLogo(t.x, t.y, t.color, scale);
+            }
+            ctx.globalAlpha = 1;
+
+            // Draw main logo
+            drawDVDLogo(logo.x, logo.y, logo.color);
+
+            // Draw reflection
+            ctx.globalAlpha = 0.3;
+            ctx.save();
+            ctx.translate(logo.x, logo.y + logo.height);
+            ctx.scale(1, -0.3);
+            drawDVDLogo(0, 0, logo.color);
+            ctx.restore();
+            ctx.globalAlpha = 1;
+
+            requestAnimationFrame(draw);
+        }
+
+        // Add some randomness to initial velocity
+        logo.vx = 2 + Math.random() * 2;
+        logo.vy = 2 + Math.random() * 2;
+        if (Math.random() > 0.5) logo.vx = -logo.vx;
+        if (Math.random() > 0.5) logo.vy = -logo.vy;
+
+        draw();
+    </script>
+</body>
+</html>

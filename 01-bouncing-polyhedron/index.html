@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bouncing Ball in Rotating Polyhedron</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            color: #fff;
+        }
+        h1 {
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            text-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+        }
+        canvas {
+            border-radius: 10px;
+            box-shadow: 0 0 40px rgba(0, 255, 255, 0.3);
+        }
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+        }
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background: linear-gradient(135deg, #00d4ff, #0099cc);
+            color: #fff;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+        }
+        .info {
+            margin-top: 15px;
+            font-size: 0.9rem;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <h1>Bouncing Ball in Rotating Icosahedron</h1>
+    <canvas id="canvas" width="700" height="700"></canvas>
+    <div class="controls">
+        <button onclick="toggleRotation()">Toggle Rotation</button>
+        <button onclick="resetBall()">Reset Ball</button>
+        <button onclick="changePolyhedron()">Change Shape</button>
+    </div>
+    <div class="info">Physics simulation with real-time collision detection</div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width, H = canvas.height;
+        const cx = W / 2, cy = H / 2;
+
+        let rotating = true;
+        let polyType = 0;
+        const polyTypes = ['icosahedron', 'dodecahedron', 'octahedron'];
+
+        // Ball state
+        let ball = {
+            x: 0, y: 0, z: 0,
+            vx: 2, vy: 1.5, vz: 1,
+            radius: 15,
+            trail: [],
+            color: { h: 0, s: 100, l: 60 }
+        };
+
+        // Rotation angles
+        let angleX = 0, angleY = 0, angleZ = 0;
+        const rotSpeed = 0.008;
+
+        // Generate polyhedron vertices
+        function generatePolyhedron(type) {
+            const phi = (1 + Math.sqrt(5)) / 2;
+            const scale = 200;
+            let vertices = [];
+
+            if (type === 'icosahedron') {
+                const a = 1, b = phi;
+                vertices = [
+                    [0, a, b], [0, a, -b], [0, -a, b], [0, -a, -b],
+                    [a, b, 0], [a, -b, 0], [-a, b, 0], [-a, -b, 0],
+                    [b, 0, a], [b, 0, -a], [-b, 0, a], [-b, 0, -a]
+                ];
+            } else if (type === 'dodecahedron') {
+                const a = 1, b = phi, c = 1/phi;
+                vertices = [
+                    [1,1,1], [1,1,-1], [1,-1,1], [1,-1,-1],
+                    [-1,1,1], [-1,1,-1], [-1,-1,1], [-1,-1,-1],
+                    [0,c,b], [0,c,-b], [0,-c,b], [0,-c,-b],
+                    [c,b,0], [c,-b,0], [-c,b,0], [-c,-b,0],
+                    [b,0,c], [b,0,-c], [-b,0,c], [-b,0,-c]
+                ];
+            } else {
+                vertices = [
+                    [1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1]
+                ];
+            }
+
+            return vertices.map(v => {
+                const len = Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+                return [v[0]/len * scale, v[1]/len * scale, v[2]/len * scale];
+            });
+        }
+
+        let vertices = generatePolyhedron(polyTypes[polyType]);
+
+        // Get faces for current polyhedron
+        function getFaces(type) {
+            if (type === 'icosahedron') {
+                return [
+                    [0,2,8], [0,8,4], [0,4,6], [0,6,10], [0,10,2],
+                    [1,9,4], [1,4,6], [1,6,11], [1,11,3], [1,3,9],
+                    [2,10,7], [2,7,5], [2,5,8], [3,11,7], [3,7,5],
+                    [3,5,9], [4,8,9], [5,8,9], [6,10,11], [7,10,11]
+                ];
+            } else if (type === 'dodecahedron') {
+                return [
+                    [0,8,4,14,12], [0,12,16,2,10], [0,10,6,18,8],
+                    [1,9,5,15,13], [1,13,17,3,11], [1,11,7,19,9],
+                    [2,16,17,3,13], [4,8,18,19,9], [5,9,19,7,15],
+                    [6,14,15,7,18], [10,2,13,15,14], [11,3,12,14,6]
+                ];
+            }
+            return [[0,2,4], [0,4,3], [0,3,5], [0,5,2], [1,2,5], [1,5,3], [1,3,4], [1,4,2]];
+        }
+
+        let faces = getFaces(polyTypes[polyType]);
+
+        // 3D rotation matrices
+        function rotatePoint(p, ax, ay, az) {
+            let [x, y, z] = p;
+
+            // Rotate around X
+            let y1 = y * Math.cos(ax) - z * Math.sin(ax);
+            let z1 = y * Math.sin(ax) + z * Math.cos(ax);
+            y = y1; z = z1;
+
+            // Rotate around Y
+            let x1 = x * Math.cos(ay) + z * Math.sin(ay);
+            z1 = -x * Math.sin(ay) + z * Math.cos(ay);
+            x = x1; z = z1;
+
+            // Rotate around Z
+            x1 = x * Math.cos(az) - y * Math.sin(az);
+            y1 = x * Math.sin(az) + y * Math.cos(az);
+
+            return [x1, y1, z1];
+        }
+
+        // Project 3D to 2D
+        function project(p) {
+            const fov = 400;
+            const distance = 600;
+            const scale = fov / (distance - p[2]);
+            return [cx + p[0] * scale, cy + p[1] * scale, scale];
+        }
+
+        // Calculate face normal
+        function faceNormal(face, rotatedVerts) {
+            const v0 = rotatedVerts[face[0]];
+            const v1 = rotatedVerts[face[1]];
+            const v2 = rotatedVerts[face[2]];
+
+            const ax = v1[0] - v0[0], ay = v1[1] - v0[1], az = v1[2] - v0[2];
+            const bx = v2[0] - v0[0], by = v2[1] - v0[1], bz = v2[2] - v0[2];
+
+            return [ay*bz - az*by, az*bx - ax*bz, ax*by - ay*bx];
+        }
+
+        // Ball physics
+        function updateBall() {
+            const gravity = 0.05;
+            const damping = 0.98;
+            const bounce = 0.85;
+
+            ball.vy += gravity;
+            ball.vx *= damping;
+            ball.vy *= damping;
+            ball.vz *= damping;
+
+            ball.x += ball.vx;
+            ball.y += ball.vy;
+            ball.z += ball.vz;
+
+            // Collision with polyhedron faces
+            const rotatedVerts = vertices.map(v => rotatePoint(v, angleX, angleY, angleZ));
+
+            for (let face of faces) {
+                const normal = faceNormal(face, rotatedVerts);
+                const len = Math.sqrt(normal[0]**2 + normal[1]**2 + normal[2]**2);
+                const nx = normal[0]/len, ny = normal[1]/len, nz = normal[2]/len;
+
+                const v0 = rotatedVerts[face[0]];
+                const dist = (ball.x - v0[0])*nx + (ball.y - v0[1])*ny + (ball.z - v0[2])*nz;
+
+                if (dist < ball.radius && dist > -ball.radius * 2) {
+                    // Reflect velocity
+                    const dot = ball.vx*nx + ball.vy*ny + ball.vz*nz;
+                    ball.vx = (ball.vx - 2*dot*nx) * bounce;
+                    ball.vy = (ball.vy - 2*dot*ny) * bounce;
+                    ball.vz = (ball.vz - 2*dot*nz) * bounce;
+
+                    // Push ball out of face
+                    ball.x += nx * (ball.radius - dist);
+                    ball.y += ny * (ball.radius - dist);
+                    ball.z += nz * (ball.radius - dist);
+
+                    // Change color on collision
+                    ball.color.h = (ball.color.h + 30) % 360;
+
+                    // Add speed boost occasionally
+                    if (Math.random() < 0.3) {
+                        ball.vx += (Math.random() - 0.5) * 2;
+                        ball.vy += (Math.random() - 0.5) * 2;
+                        ball.vz += (Math.random() - 0.5) * 2;
+                    }
+                }
+            }
+
+            // Keep ball inside bounds
+            const maxDist = 180;
+            const ballDist = Math.sqrt(ball.x**2 + ball.y**2 + ball.z**2);
+            if (ballDist > maxDist) {
+                const scale = maxDist / ballDist;
+                ball.x *= scale;
+                ball.y *= scale;
+                ball.z *= scale;
+            }
+
+            // Update trail
+            ball.trail.push({x: ball.x, y: ball.y, z: ball.z, h: ball.color.h});
+            if (ball.trail.length > 30) ball.trail.shift();
+        }
+
+        function draw() {
+            ctx.fillStyle = 'rgba(26, 26, 46, 0.3)';
+            ctx.fillRect(0, 0, W, H);
+
+            if (rotating) {
+                angleX += rotSpeed;
+                angleY += rotSpeed * 0.7;
+                angleZ += rotSpeed * 0.3;
+            }
+
+            updateBall();
+
+            // Get rotated and projected vertices
+            const rotatedVerts = vertices.map(v => rotatePoint(v, angleX, angleY, angleZ));
+            const projectedVerts = rotatedVerts.map(v => project(v));
+
+            // Sort faces by depth (painter's algorithm)
+            const facesWithDepth = faces.map((face, i) => {
+                const avgZ = face.reduce((sum, vi) => sum + rotatedVerts[vi][2], 0) / face.length;
+                return { face, avgZ, index: i };
+            }).sort((a, b) => a.avgZ - b.avgZ);
+
+            // Draw faces
+            for (let { face, avgZ } of facesWithDepth) {
+                const normal = faceNormal(face, rotatedVerts);
+                if (normal[2] < 0) continue; // Back-face culling
+
+                ctx.beginPath();
+                const [sx, sy] = projectedVerts[face[0]];
+                ctx.moveTo(sx, sy);
+                for (let i = 1; i < face.length; i++) {
+                    const [x, y] = projectedVerts[face[i]];
+                    ctx.lineTo(x, y);
+                }
+                ctx.closePath();
+
+                const brightness = Math.max(0.2, Math.min(1, (avgZ + 200) / 400));
+                ctx.fillStyle = `rgba(0, 200, 255, ${brightness * 0.15})`;
+                ctx.fill();
+                ctx.strokeStyle = `rgba(0, 255, 255, ${brightness * 0.8})`;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            // Draw ball trail
+            for (let i = 0; i < ball.trail.length; i++) {
+                const t = ball.trail[i];
+                const rotated = rotatePoint([t.x, t.y, t.z], angleX, angleY, angleZ);
+                const [px, py, scale] = project(rotated);
+                const alpha = i / ball.trail.length * 0.5;
+                ctx.beginPath();
+                ctx.arc(px, py, ball.radius * scale * 0.5, 0, Math.PI * 2);
+                ctx.fillStyle = `hsla(${t.h}, 100%, 60%, ${alpha})`;
+                ctx.fill();
+            }
+
+            // Draw ball
+            const rotatedBall = rotatePoint([ball.x, ball.y, ball.z], angleX, angleY, angleZ);
+            const [bx, by, bScale] = project(rotatedBall);
+
+            const gradient = ctx.createRadialGradient(bx - 5, by - 5, 0, bx, by, ball.radius * bScale);
+            gradient.addColorStop(0, `hsla(${ball.color.h}, 100%, 80%, 1)`);
+            gradient.addColorStop(0.5, `hsla(${ball.color.h}, 100%, 60%, 1)`);
+            gradient.addColorStop(1, `hsla(${ball.color.h}, 100%, 40%, 1)`);
+
+            ctx.beginPath();
+            ctx.arc(bx, by, ball.radius * bScale, 0, Math.PI * 2);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+
+            // Ball glow
+            ctx.shadowColor = `hsla(${ball.color.h}, 100%, 60%, 0.8)`;
+            ctx.shadowBlur = 20;
+            ctx.beginPath();
+            ctx.arc(bx, by, ball.radius * bScale * 0.8, 0, Math.PI * 2);
+            ctx.fillStyle = `hsla(${ball.color.h}, 100%, 70%, 0.5)`;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            requestAnimationFrame(draw);
+        }
+
+        function toggleRotation() {
+            rotating = !rotating;
+        }
+
+        function resetBall() {
+            ball.x = 0; ball.y = 0; ball.z = 0;
+            ball.vx = (Math.random() - 0.5) * 4;
+            ball.vy = (Math.random() - 0.5) * 4;
+            ball.vz = (Math.random() - 0.5) * 4;
+            ball.trail = [];
+        }
+
+        function changePolyhedron() {
+            polyType = (polyType + 1) % polyTypes.length;
+            vertices = generatePolyhedron(polyTypes[polyType]);
+            faces = getFaces(polyTypes[polyType]);
+            resetBall();
+        }
+
+        draw();
+    </script>
+</body>
+</html>

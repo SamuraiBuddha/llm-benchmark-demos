@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Rotating Cube</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #0f0f23 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            color: #fff;
+            overflow: hidden;
+        }
+        h1 {
+            position: fixed;
+            top: 20px;
+            font-size: 1.3rem;
+            text-shadow: 0 0 20px rgba(255, 100, 255, 0.5);
+            z-index: 100;
+        }
+        canvas {
+            border-radius: 10px;
+        }
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            display: flex;
+            gap: 15px;
+            z-index: 100;
+        }
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background: linear-gradient(135deg, #ff00ff, #cc00cc);
+            color: #fff;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(255, 0, 255, 0.5);
+        }
+        .info {
+            position: fixed;
+            bottom: 70px;
+            font-size: 0.9rem;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body>
+    <h1>3D Rotating Cube with Perspective</h1>
+    <canvas id="canvas"></canvas>
+    <div class="info">Drag to rotate manually | Scroll to zoom</div>
+    <div class="controls">
+        <button onclick="toggleAuto()">Toggle Auto-Rotate</button>
+        <button onclick="changeStyle()">Change Style</button>
+        <button onclick="resetView()">Reset View</button>
+        <button onclick="addCube()">Add Cube</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let W, H;
+        function resize() {
+            W = canvas.width = window.innerWidth;
+            H = canvas.height = window.innerHeight;
+        }
+        resize();
+        window.addEventListener('resize', resize);
+
+        // State
+        let autoRotate = true;
+        let styleIndex = 0;
+        const styles = ['neon', 'wireframe', 'solid', 'gradient', 'rainbow'];
+        let zoom = 1;
+
+        // Rotation
+        let angleX = 0, angleY = 0, angleZ = 0;
+        let targetAngleX = 0, targetAngleY = 0;
+        let velocityX = 0.01, velocityY = 0.015, velocityZ = 0.005;
+
+        // Multiple cubes
+        let cubes = [{ x: 0, y: 0, z: 0, size: 150, phase: 0 }];
+
+        // Cube vertices (centered at origin)
+        function getCubeVertices(size) {
+            const s = size / 2;
+            return [
+                [-s, -s, -s], [s, -s, -s], [s, s, -s], [-s, s, -s],
+                [-s, -s, s], [s, -s, s], [s, s, s], [-s, s, s]
+            ];
+        }
+
+        // Cube edges
+        const edges = [
+            [0,1], [1,2], [2,3], [3,0],
+            [4,5], [5,6], [6,7], [7,4],
+            [0,4], [1,5], [2,6], [3,7]
+        ];
+
+        // Cube faces (indices)
+        const faces = [
+            { verts: [0,1,2,3], color: '#ff0066' }, // back
+            { verts: [4,5,6,7], color: '#00ff66' }, // front
+            { verts: [0,1,5,4], color: '#6600ff' }, // bottom
+            { verts: [2,3,7,6], color: '#ff6600' }, // top
+            { verts: [0,3,7,4], color: '#00ffff' }, // left
+            { verts: [1,2,6,5], color: '#ffff00' }  // right
+        ];
+
+        // 3D rotation
+        function rotatePoint(p, ax, ay, az) {
+            let [x, y, z] = p;
+
+            // X rotation
+            let y1 = y * Math.cos(ax) - z * Math.sin(ax);
+            let z1 = y * Math.sin(ax) + z * Math.cos(ax);
+            y = y1; z = z1;
+
+            // Y rotation
+            let x1 = x * Math.cos(ay) + z * Math.sin(ay);
+            z1 = -x * Math.sin(ay) + z * Math.cos(ay);
+            x = x1; z = z1;
+
+            // Z rotation
+            x1 = x * Math.cos(az) - y * Math.sin(az);
+            y1 = x * Math.sin(az) + y * Math.cos(az);
+
+            return [x1, y1, z1];
+        }
+
+        // Perspective projection
+        function project(p, offsetX = 0, offsetY = 0, offsetZ = 0) {
+            const fov = 500 * zoom;
+            const distance = 600;
+            const x = p[0] + offsetX;
+            const y = p[1] + offsetY;
+            const z = p[2] + offsetZ;
+            const scale = fov / (distance - z);
+            return {
+                x: W/2 + x * scale,
+                y: H/2 + y * scale,
+                scale: scale,
+                z: z
+            };
+        }
+
+        // Calculate face normal (for back-face culling and lighting)
+        function getFaceNormal(verts, indices) {
+            const v0 = verts[indices[0]];
+            const v1 = verts[indices[1]];
+            const v2 = verts[indices[2]];
+
+            const ax = v1[0] - v0[0], ay = v1[1] - v0[1], az = v1[2] - v0[2];
+            const bx = v2[0] - v0[0], by = v2[1] - v0[1], bz = v2[2] - v0[2];
+
+            return {
+                x: ay*bz - az*by,
+                y: az*bx - ax*bz,
+                z: ax*by - ay*bx
+            };
+        }
+
+        function drawCube(cube, time) {
+            const vertices = getCubeVertices(cube.size);
+            const phase = cube.phase;
+
+            // Rotate vertices
+            const rotated = vertices.map(v =>
+                rotatePoint(v, angleX + phase, angleY + phase * 0.5, angleZ + phase * 0.3)
+            );
+
+            // Project vertices
+            const projected = rotated.map(v => project(v, cube.x, cube.y, cube.z));
+
+            // Sort faces by depth
+            const sortedFaces = faces.map((face, i) => {
+                const avgZ = face.verts.reduce((sum, vi) => sum + rotated[vi][2], 0) / 4;
+                return { ...face, index: i, avgZ };
+            }).sort((a, b) => a.avgZ - b.avgZ);
+
+            // Draw based on style
+            if (styles[styleIndex] === 'wireframe') {
+                drawWireframe(projected, rotated, time);
+            } else if (styles[styleIndex] === 'neon') {
+                drawNeon(projected, rotated, sortedFaces, time);
+            } else if (styles[styleIndex] === 'solid') {
+                drawSolid(projected, rotated, sortedFaces);
+            } else if (styles[styleIndex] === 'gradient') {
+                drawGradient(projected, rotated, sortedFaces);
+            } else if (styles[styleIndex] === 'rainbow') {
+                drawRainbow(projected, rotated, sortedFaces, time);
+            }
+        }
+
+        function drawWireframe(projected, rotated, time) {
+            ctx.strokeStyle = `hsl(${(time * 50) % 360}, 100%, 60%)`;
+            ctx.lineWidth = 2;
+            ctx.shadowColor = ctx.strokeStyle;
+            ctx.shadowBlur = 15;
+
+            for (let [i, j] of edges) {
+                ctx.beginPath();
+                ctx.moveTo(projected[i].x, projected[i].y);
+                ctx.lineTo(projected[j].x, projected[j].y);
+                ctx.stroke();
+            }
+            ctx.shadowBlur = 0;
+
+            // Draw vertices
+            for (let p of projected) {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 5 * p.scale, 0, Math.PI * 2);
+                ctx.fillStyle = '#fff';
+                ctx.fill();
+            }
+        }
+
+        function drawNeon(projected, rotated, sortedFaces, time) {
+            for (let face of sortedFaces) {
+                const normal = getFaceNormal(rotated, face.verts);
+                if (normal.z < 0) continue;
+
+                const hue = (time * 30 + face.index * 60) % 360;
+
+                ctx.beginPath();
+                ctx.moveTo(projected[face.verts[0]].x, projected[face.verts[0]].y);
+                for (let i = 1; i < face.verts.length; i++) {
+                    ctx.lineTo(projected[face.verts[i]].x, projected[face.verts[i]].y);
+                }
+                ctx.closePath();
+
+                ctx.fillStyle = `hsla(${hue}, 100%, 50%, 0.1)`;
+                ctx.fill();
+
+                ctx.strokeStyle = `hsl(${hue}, 100%, 60%)`;
+                ctx.lineWidth = 3;
+                ctx.shadowColor = `hsl(${hue}, 100%, 60%)`;
+                ctx.shadowBlur = 20;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        function drawSolid(projected, rotated, sortedFaces) {
+            for (let face of sortedFaces) {
+                const normal = getFaceNormal(rotated, face.verts);
+                if (normal.z < 0) continue;
+
+                const brightness = Math.max(0.3, normal.z / 200);
+
+                ctx.beginPath();
+                ctx.moveTo(projected[face.verts[0]].x, projected[face.verts[0]].y);
+                for (let i = 1; i < face.verts.length; i++) {
+                    ctx.lineTo(projected[face.verts[i]].x, projected[face.verts[i]].y);
+                }
+                ctx.closePath();
+
+                ctx.fillStyle = face.color;
+                ctx.globalAlpha = brightness;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+        }
+
+        function drawGradient(projected, rotated, sortedFaces) {
+            for (let face of sortedFaces) {
+                const normal = getFaceNormal(rotated, face.verts);
+                if (normal.z < 0) continue;
+
+                const p0 = projected[face.verts[0]];
+                const p2 = projected[face.verts[2]];
+
+                const gradient = ctx.createLinearGradient(p0.x, p0.y, p2.x, p2.y);
+                gradient.addColorStop(0, face.color);
+                gradient.addColorStop(1, '#000');
+
+                ctx.beginPath();
+                ctx.moveTo(p0.x, p0.y);
+                for (let i = 1; i < face.verts.length; i++) {
+                    ctx.lineTo(projected[face.verts[i]].x, projected[face.verts[i]].y);
+                }
+                ctx.closePath();
+
+                ctx.fillStyle = gradient;
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+        }
+
+        function drawRainbow(projected, rotated, sortedFaces, time) {
+            for (let face of sortedFaces) {
+                const normal = getFaceNormal(rotated, face.verts);
+                if (normal.z < 0) continue;
+
+                const hue = (time * 100 + face.avgZ + face.index * 60) % 360;
+                const brightness = Math.max(40, 70 + normal.z / 5);
+
+                ctx.beginPath();
+                ctx.moveTo(projected[face.verts[0]].x, projected[face.verts[0]].y);
+                for (let i = 1; i < face.verts.length; i++) {
+                    ctx.lineTo(projected[face.verts[i]].x, projected[face.verts[i]].y);
+                }
+                ctx.closePath();
+
+                ctx.fillStyle = `hsl(${hue}, 100%, ${brightness}%)`;
+                ctx.fill();
+                ctx.strokeStyle = `hsl(${hue}, 100%, 90%)`;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+        }
+
+        function draw(time) {
+            time = time / 1000;
+
+            // Clear with fade effect
+            ctx.fillStyle = 'rgba(15, 15, 35, 0.3)';
+            ctx.fillRect(0, 0, W, H);
+
+            // Update rotation
+            if (autoRotate) {
+                angleX += velocityX;
+                angleY += velocityY;
+                angleZ += velocityZ;
+            } else {
+                // Smooth interpolation to target
+                angleX += (targetAngleX - angleX) * 0.1;
+                angleY += (targetAngleY - angleY) * 0.1;
+            }
+
+            // Draw all cubes
+            for (let cube of cubes) {
+                drawCube(cube, time);
+            }
+
+            requestAnimationFrame(draw);
+        }
+
+        // Controls
+        function toggleAuto() {
+            autoRotate = !autoRotate;
+        }
+
+        function changeStyle() {
+            styleIndex = (styleIndex + 1) % styles.length;
+        }
+
+        function resetView() {
+            angleX = angleY = angleZ = 0;
+            targetAngleX = targetAngleY = 0;
+            zoom = 1;
+            cubes = [{ x: 0, y: 0, z: 0, size: 150, phase: 0 }];
+        }
+
+        function addCube() {
+            const offset = 200 * cubes.length;
+            cubes.push({
+                x: (Math.random() - 0.5) * 300,
+                y: (Math.random() - 0.5) * 300,
+                z: (Math.random() - 0.5) * 200,
+                size: 80 + Math.random() * 70,
+                phase: Math.random() * Math.PI * 2
+            });
+        }
+
+        // Mouse/touch interaction
+        let isDragging = false;
+        let lastX, lastY;
+
+        canvas.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            lastX = e.clientX;
+            lastY = e.clientY;
+            autoRotate = false;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const dx = e.clientX - lastX;
+            const dy = e.clientY - lastY;
+            targetAngleY += dx * 0.01;
+            targetAngleX += dy * 0.01;
+            lastX = e.clientX;
+            lastY = e.clientY;
+        });
+
+        canvas.addEventListener('mouseup', () => isDragging = false);
+        canvas.addEventListener('mouseleave', () => isDragging = false);
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            zoom = Math.max(0.5, Math.min(3, zoom - e.deltaY * 0.001));
+        });
+
+        requestAnimationFrame(draw);
+    </script>
+</body>
+</html>
