@@ -3,267 +3,1757 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DVD Logo Bounce</title>
+    <title>DVD Logo Bounce - SPECTACULAR Edition</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
             background: #000;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            color: #fff;
             overflow: hidden;
+            font-family: 'Courier New', monospace;
+            user-select: none;
         }
-        h1 {
+
+        #mainCanvas {
             position: fixed;
-            top: 20px;
-            font-size: 1.2rem;
-            opacity: 0.5;
-            z-index: 100;
+            top: 0;
+            left: 0;
+            z-index: 1;
         }
-        canvas {
+
+        #heatmapCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 0;
+            opacity: 0.3;
+        }
+
+        #crtOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+            display: none;
+        }
+
+        #crtOverlay.active {
             display: block;
         }
-        .stats {
+
+        #crtOverlay::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.15),
+                rgba(0, 0, 0, 0.15) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+            pointer-events: none;
+        }
+
+        #crtOverlay::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(
+                ellipse at center,
+                transparent 0%,
+                rgba(0, 0, 0, 0.3) 90%,
+                rgba(0, 0, 0, 0.6) 100%
+            );
+            pointer-events: none;
+        }
+
+        .crt-flicker {
+            animation: flicker 0.15s infinite;
+        }
+
+        @keyframes flicker {
+            0% { opacity: 0.97; }
+            50% { opacity: 1; }
+            100% { opacity: 0.98; }
+        }
+
+        #controls {
             position: fixed;
-            bottom: 20px;
-            display: flex;
-            gap: 30px;
-            font-size: 1rem;
-            z-index: 100;
+            top: 10px;
+            right: 10px;
+            z-index: 200;
+            background: rgba(0, 0, 0, 0.85);
+            border: 2px solid #444;
+            border-radius: 12px;
+            padding: 15px;
+            color: #0ff;
+            max-width: 260px;
+            max-height: 85vh;
+            overflow-y: auto;
+            backdrop-filter: blur(10px);
         }
-        .stat {
-            text-align: center;
-        }
-        .stat-value {
-            font-size: 2rem;
-            font-weight: bold;
+
+        #controls h2 {
             color: #ff0;
+            margin-bottom: 10px;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            cursor: pointer;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #333;
         }
-        .stat-label {
-            opacity: 0.7;
-            font-size: 0.8rem;
+
+        #controls label {
+            display: block;
+            margin: 10px 0 4px;
+            font-size: 11px;
+            color: #0f0;
         }
-        .corner-flash {
+
+        #controls select, #controls input[type="range"] {
+            width: 100%;
+            background: #111;
+            border: 1px solid #333;
+            color: #fff;
+            padding: 6px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        #controls input[type="range"] {
+            -webkit-appearance: none;
+            height: 8px;
+            background: linear-gradient(90deg, #0ff, #f0f);
+            border-radius: 4px;
+        }
+
+        #controls input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #fff;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px #0ff;
+        }
+
+        #controls button {
+            width: 100%;
+            margin-top: 8px;
+            padding: 10px;
+            background: linear-gradient(180deg, #222, #111);
+            border: 1px solid #444;
+            color: #0ff;
+            cursor: pointer;
+            border-radius: 6px;
+            font-family: inherit;
+            text-transform: uppercase;
+            font-size: 10px;
+            letter-spacing: 1px;
+            transition: all 0.3s;
+        }
+
+        #controls button:hover {
+            background: linear-gradient(180deg, #333, #1a1a1a);
+            border-color: #0ff;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.4);
+            transform: translateY(-1px);
+        }
+
+        #controls button.chaos-btn {
+            background: linear-gradient(180deg, #f00, #900);
+            color: #fff;
+            border-color: #f00;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 5px #f00; }
+            50% { box-shadow: 0 0 20px #f00, 0 0 30px #ff0; }
+        }
+
+        #stats {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            z-index: 200;
+            background: rgba(0, 0, 0, 0.85);
+            border: 2px solid #444;
+            border-radius: 12px;
+            padding: 15px;
+            color: #0ff;
+            font-size: 12px;
+            min-width: 220px;
+            backdrop-filter: blur(10px);
+        }
+
+        #stats h3 {
+            color: #ff0;
+            margin-bottom: 10px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 8px;
+        }
+
+        #stats .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 6px 0;
+            padding: 4px 0;
+        }
+
+        #stats .stat-value {
+            color: #0f0;
+            font-weight: bold;
+            text-shadow: 0 0 5px #0f0;
+        }
+
+        #stats .stat-value.corner-value {
+            color: #f0f;
+            text-shadow: 0 0 10px #f0f;
+            font-size: 14px;
+        }
+
+        #cornerAlert {
             position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 4rem;
+            z-index: 300;
+            font-size: 72px;
             font-weight: bold;
             color: #fff;
-            text-shadow: 0 0 50px currentColor;
+            text-shadow: 0 0 30px #ff0, 0 0 60px #f0f, 0 0 90px #0ff;
             opacity: 0;
-            transition: opacity 0.1s;
             pointer-events: none;
-            z-index: 1000;
+            text-align: center;
+            letter-spacing: 5px;
         }
-        .corner-flash.show {
-            opacity: 1;
-            animation: flash 0.5s ease-out;
+
+        .corner-celebration {
+            animation: celebrateCorner 2.5s ease-out forwards;
         }
-        @keyframes flash {
-            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
-            100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+
+        @keyframes celebrateCorner {
+            0% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(0.3) rotate(-10deg);
+            }
+            15% {
+                transform: translate(-50%, -50%) scale(1.3) rotate(5deg);
+            }
+            30% {
+                transform: translate(-50%, -50%) scale(1.1) rotate(-3deg);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(2.5) rotate(0deg);
+            }
+        }
+
+        #predictionToggle {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            z-index: 200;
+            background: rgba(0, 0, 0, 0.85);
+            border: 2px solid #444;
+            border-radius: 12px;
+            padding: 12px;
+            color: #0ff;
+            font-size: 11px;
+            backdrop-filter: blur(10px);
+        }
+
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 6px 0;
+            cursor: pointer;
+        }
+
+        .checkbox-wrapper input {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: #0ff;
+        }
+
+        .checkbox-wrapper label {
+            cursor: pointer;
+        }
+
+        .flash-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 99;
+            pointer-events: none;
+            opacity: 0;
+        }
+
+        .flash-active {
+            animation: flashScreen 0.6s ease-out;
+        }
+
+        @keyframes flashScreen {
+            0% { opacity: 0.9; }
+            50% { opacity: 0.5; }
+            100% { opacity: 0; }
+        }
+
+        #easterEggNotif {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 400;
+            background: linear-gradient(45deg, #f0f, #0ff, #ff0, #0f0, #f0f);
+            background-size: 400% 400%;
+            animation: gradientShift 2s ease infinite;
+            padding: 25px 50px;
+            border-radius: 15px;
+            font-size: 28px;
+            font-weight: bold;
+            color: #000;
+            display: none;
+            text-align: center;
+            box-shadow: 0 0 50px rgba(255, 255, 255, 0.5);
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .minimized {
+            max-height: 45px !important;
+            overflow: hidden !important;
+        }
+
+        .minimized h2::after {
+            content: ' [+]';
+            font-size: 10px;
+        }
+
+        #nearMissAlert {
+            position: fixed;
+            top: 20%;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 250;
+            font-size: 24px;
+            color: #ff0;
+            text-shadow: 0 0 10px #ff0;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .near-miss-show {
+            animation: nearMissAnim 1s ease-out forwards;
+        }
+
+        @keyframes nearMissAnim {
+            0% { opacity: 1; transform: translateX(-50%) scale(1); }
+            100% { opacity: 0; transform: translateX(-50%) scale(1.5) translateY(-20px); }
+        }
+
+        #keyboard-hints {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 200;
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 10px;
+            color: #666;
+        }
+
+        #keyboard-hints span {
+            color: #0ff;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
-    <h1>DVD Logo Bounce - Watch for Corner Hits!</h1>
-    <canvas id="canvas"></canvas>
-    <div class="corner-flash" id="flash">CORNER!</div>
-    <div class="stats">
-        <div class="stat">
-            <div class="stat-value" id="bounces">0</div>
-            <div class="stat-label">Bounces</div>
+    <canvas id="heatmapCanvas"></canvas>
+    <canvas id="mainCanvas"></canvas>
+    <div id="crtOverlay"></div>
+    <div id="flashOverlay" class="flash-overlay"></div>
+    <div id="cornerAlert">CORNER HIT!</div>
+    <div id="nearMissAlert">SO CLOSE!</div>
+    <div id="easterEggNotif"></div>
+
+    <div id="keyboard-hints">
+        <span>C</span> CRT | <span>H</span> Heat | <span>P</span> Predict | <span>T</span> Trail | <span>R</span> Reset | <span>SPACE</span> Chaos | <span>SHIFT+Click</span> Add Logo
+    </div>
+
+    <div id="controls">
+        <h2 onclick="toggleControls()">DVD Bounce Controls</h2>
+
+        <label>Logo Style</label>
+        <select id="logoStyle">
+            <option value="dvd">DVD Video</option>
+            <option value="vhs">VHS Tape</option>
+            <option value="atari">ATARI</option>
+            <option value="nintendo">NINTENDO</option>
+            <option value="sega">SEGA</option>
+            <option value="blockbuster">BLOCKBUSTER</option>
+            <option value="laserdisc">LASERDISC</option>
+            <option value="betamax">BETAMAX</option>
+        </select>
+
+        <label>Number of Logos: <span id="logoCountDisplay">1</span></label>
+        <input type="range" id="logoCount" min="1" max="25" value="1">
+
+        <label>Speed: <span id="speedDisplay">3</span></label>
+        <input type="range" id="speed" min="1" max="12" value="3" step="0.5">
+
+        <label>Logo Size: <span id="sizeDisplay">100</span></label>
+        <input type="range" id="logoSize" min="40" max="200" value="100">
+
+        <button onclick="toggleCRT()">Toggle CRT Effect</button>
+        <button onclick="toggleHeatmap()">Toggle Heatmap</button>
+        <button onclick="resetStats()">Reset Statistics</button>
+        <button onclick="forceCorner()">Force Corner (Cheat!)</button>
+        <button onclick="chaosMode()" class="chaos-btn">CHAOS MODE</button>
+    </div>
+
+    <div id="stats">
+        <h3>Statistics</h3>
+        <div class="stat-row">
+            <span>Total Bounces:</span>
+            <span class="stat-value" id="bounceCount">0</span>
         </div>
-        <div class="stat">
-            <div class="stat-value" id="corners">0</div>
-            <div class="stat-label">Corner Hits</div>
+        <div class="stat-row">
+            <span>Corner Hits:</span>
+            <span class="stat-value corner-value" id="cornerCount">0</span>
         </div>
-        <div class="stat">
-            <div class="stat-value" id="time">0:00</div>
-            <div class="stat-label">Time</div>
+        <div class="stat-row">
+            <span>Near Misses:</span>
+            <span class="stat-value" id="nearMissCount">0</span>
+        </div>
+        <div class="stat-row">
+            <span>Time Running:</span>
+            <span class="stat-value" id="timeRunning">0:00</span>
+        </div>
+        <div class="stat-row">
+            <span>Est. Next Corner:</span>
+            <span class="stat-value" id="cornerPrediction">Calculating...</span>
+        </div>
+        <div class="stat-row">
+            <span>Best Streak:</span>
+            <span class="stat-value" id="streakCount">0</span>
+        </div>
+        <div class="stat-row">
+            <span>Corner Rate:</span>
+            <span class="stat-value" id="cornerRate">0%</span>
+        </div>
+    </div>
+
+    <div id="predictionToggle">
+        <div class="checkbox-wrapper">
+            <input type="checkbox" id="showPrediction" checked>
+            <label for="showPrediction">Prediction Line</label>
+        </div>
+        <div class="checkbox-wrapper">
+            <input type="checkbox" id="showTrail">
+            <label for="showTrail">Motion Trail</label>
+        </div>
+        <div class="checkbox-wrapper">
+            <input type="checkbox" id="soundEnabled" checked>
+            <label for="soundEnabled">Sound Effects</label>
+        </div>
+        <div class="checkbox-wrapper">
+            <input type="checkbox" id="showGlow" checked>
+            <label for="showGlow">Glow Effects</label>
         </div>
     </div>
 
     <script>
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        const flash = document.getElementById('flash');
+        // ============================================
+        // CANVAS SETUP
+        // ============================================
+        const mainCanvas = document.getElementById('mainCanvas');
+        const ctx = mainCanvas.getContext('2d');
+        const heatmapCanvas = document.getElementById('heatmapCanvas');
+        const heatCtx = heatmapCanvas.getContext('2d');
 
-        let W, H;
-        function resize() {
-            W = canvas.width = window.innerWidth;
-            H = canvas.height = window.innerHeight;
+        let width, height;
+
+        function resizeCanvas() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            mainCanvas.width = width;
+            mainCanvas.height = height;
+            heatmapCanvas.width = width;
+            heatmapCanvas.height = height;
         }
-        resize();
-        window.addEventListener('resize', resize);
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
 
-        // Stats
-        let bounces = 0;
-        let corners = 0;
-        let startTime = Date.now();
+        // ============================================
+        // AUDIO SYSTEM
+        // ============================================
+        let audioCtx = null;
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
 
-        // Colors for the DVD logo
-        const colors = [
-            '#ff0000', '#ff7700', '#ffff00', '#00ff00',
-            '#00ffff', '#0077ff', '#7700ff', '#ff00ff'
+        function playBounceSound(pitch = 1) {
+            if (!document.getElementById('soundEnabled').checked) return;
+            initAudio();
+
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            oscillator.frequency.setValueAtTime(150 * pitch + Math.random() * 100, audioCtx.currentTime);
+            oscillator.type = 'sine';
+            gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.15);
+        }
+
+        function playCornerFanfare() {
+            if (!document.getElementById('soundEnabled').checked) return;
+            initAudio();
+
+            // Epic arpeggio
+            const notes = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99, 1046.50];
+            notes.forEach((freq, i) => {
+                setTimeout(() => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.frequency.value = freq;
+                    osc.type = 'square';
+                    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.4);
+                }, i * 60);
+            });
+
+            // Bass hit
+            setTimeout(() => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.frequency.setValueAtTime(80, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.5);
+                osc.type = 'sawtooth';
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.5);
+            }, 100);
+        }
+
+        function playNearMissSound() {
+            if (!document.getElementById('soundEnabled').checked) return;
+            initAudio();
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.3);
+            osc.type = 'triangle';
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.3);
+        }
+
+        // ============================================
+        // COLOR PALETTE
+        // ============================================
+        const logoColors = [
+            '#ff0040', '#ff6600', '#ffcc00', '#00ff66',
+            '#00ccff', '#0066ff', '#9900ff', '#ff0099',
+            '#00ffcc', '#ff3366', '#66ff00', '#ff00ff'
         ];
-        let colorIndex = 0;
 
-        // DVD Logo
-        const logo = {
-            x: W / 2,
-            y: H / 2,
-            width: 150,
-            height: 75,
-            vx: 3,
-            vy: 2,
-            color: colors[0],
-            trail: []
-        };
+        // ============================================
+        // PARTICLE SYSTEM
+        // ============================================
+        let particles = [];
 
-        // Draw DVD text
-        function drawDVDLogo(x, y, color, scale = 1) {
-            ctx.save();
-            ctx.translate(x, y);
-            ctx.scale(scale, scale);
+        class Particle {
+            constructor(x, y, color, type = 'normal') {
+                this.x = x;
+                this.y = y;
+                this.type = type;
 
-            // Glow effect
-            ctx.shadowColor = color;
-            ctx.shadowBlur = 20;
+                if (type === 'corner') {
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = 5 + Math.random() * 15;
+                    this.vx = Math.cos(angle) * speed;
+                    this.vy = Math.sin(angle) * speed;
+                    this.size = 4 + Math.random() * 8;
+                    this.decay = 0.015 + Math.random() * 0.01;
+                } else if (type === 'sparkle') {
+                    this.vx = (Math.random() - 0.5) * 8;
+                    this.vy = (Math.random() - 0.5) * 8 - 3;
+                    this.size = 2 + Math.random() * 4;
+                    this.decay = 0.03 + Math.random() * 0.02;
+                } else {
+                    this.vx = (Math.random() - 0.5) * 10;
+                    this.vy = (Math.random() - 0.5) * 10;
+                    this.size = 2 + Math.random() * 4;
+                    this.decay = 0.02 + Math.random() * 0.02;
+                }
 
-            // DVD text
-            ctx.font = 'bold 48px Arial';
-            ctx.fillStyle = color;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('DVD', 0, -10);
+                this.color = color;
+                this.life = 1;
+                this.rotation = Math.random() * Math.PI * 2;
+                this.rotationSpeed = (Math.random() - 0.5) * 0.3;
+            }
 
-            // Video text
-            ctx.font = 'bold 18px Arial';
-            ctx.fillText('VIDEO', 0, 20);
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vx *= 0.98;
+                this.vy *= 0.98;
+                this.vy += 0.15; // gravity
+                this.life -= this.decay;
+                this.rotation += this.rotationSpeed;
+            }
 
-            ctx.restore();
+            draw(ctx) {
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+
+                if (this.type === 'corner') {
+                    // Star shape for corner particles
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    for (let i = 0; i < 5; i++) {
+                        const angle = (i * Math.PI * 2) / 5 - Math.PI / 2;
+                        const outerX = Math.cos(angle) * this.size * this.life;
+                        const outerY = Math.sin(angle) * this.size * this.life;
+                        const innerAngle = angle + Math.PI / 5;
+                        const innerX = Math.cos(innerAngle) * this.size * 0.4 * this.life;
+                        const innerY = Math.sin(innerAngle) * this.size * 0.4 * this.life;
+
+                        if (i === 0) ctx.moveTo(outerX, outerY);
+                        else ctx.lineTo(outerX, outerY);
+                        ctx.lineTo(innerX, innerY);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+
+                    // Glow
+                    ctx.shadowColor = this.color;
+                    ctx.shadowBlur = 10;
+                    ctx.fill();
+                } else {
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.size * this.life, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.restore();
+            }
         }
 
-        function changeColor() {
-            colorIndex = (colorIndex + 1) % colors.length;
-            logo.color = colors[colorIndex];
+        // ============================================
+        // RIPPLE EFFECT
+        // ============================================
+        let ripples = [];
+
+        class Ripple {
+            constructor(x, y, color, maxRadius = 300) {
+                this.x = x;
+                this.y = y;
+                this.radius = 10;
+                this.maxRadius = maxRadius;
+                this.color = color;
+                this.life = 1;
+            }
+
+            update() {
+                this.radius += 10;
+                this.life = 1 - (this.radius / this.maxRadius);
+            }
+
+            draw(ctx) {
+                if (this.life <= 0) return;
+                ctx.save();
+                ctx.globalAlpha = this.life * 0.6;
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 4 * this.life;
+                ctx.shadowColor = this.color;
+                ctx.shadowBlur = 20;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            }
         }
 
-        function checkCornerHit() {
-            const margin = 10;
-            const hitLeft = logo.x - logo.width/2 <= margin;
-            const hitRight = logo.x + logo.width/2 >= W - margin;
-            const hitTop = logo.y - logo.height/2 <= margin;
-            const hitBottom = logo.y + logo.height/2 >= H - margin;
-
-            if ((hitLeft || hitRight) && (hitTop || hitBottom)) {
-                corners++;
-                document.getElementById('corners').textContent = corners;
-                flash.style.color = logo.color;
-                flash.classList.add('show');
-                setTimeout(() => flash.classList.remove('show'), 500);
-
-                // Extra color changes for corner
-                changeColor();
-                changeColor();
-                return true;
-            }
-            return false;
-        }
-
-        function update() {
-            logo.x += logo.vx;
-            logo.y += logo.vy;
-
-            let bounced = false;
-
-            // Bounce off walls
-            if (logo.x - logo.width/2 <= 0) {
-                logo.x = logo.width/2;
-                logo.vx = Math.abs(logo.vx);
-                bounced = true;
-            }
-            if (logo.x + logo.width/2 >= W) {
-                logo.x = W - logo.width/2;
-                logo.vx = -Math.abs(logo.vx);
-                bounced = true;
-            }
-            if (logo.y - logo.height/2 <= 0) {
-                logo.y = logo.height/2;
-                logo.vy = Math.abs(logo.vy);
-                bounced = true;
-            }
-            if (logo.y + logo.height/2 >= H) {
-                logo.y = H - logo.height/2;
-                logo.vy = -Math.abs(logo.vy);
-                bounced = true;
+        // ============================================
+        // LOGO CLASS
+        // ============================================
+        class Logo {
+            constructor(x, y, vx, vy) {
+                this.x = x || Math.random() * (width - 200) + 100;
+                this.y = y || Math.random() * (height - 100) + 50;
+                const baseSpeed = parseFloat(document.getElementById('speed').value);
+                this.vx = vx || (Math.random() > 0.5 ? 1 : -1) * (baseSpeed + Math.random());
+                this.vy = vy || (Math.random() > 0.5 ? 1 : -1) * (baseSpeed + Math.random() * 0.5);
+                this.colorIndex = Math.floor(Math.random() * logoColors.length);
+                this.rotation = 0;
+                this.rotationSpeed = 0;
+                this.trail = [];
+                this.maxTrail = 40;
+                this.scale = 1;
+                this.targetScale = 1;
+                this.bounceAnimation = 0;
             }
 
-            if (bounced) {
-                bounces++;
-                document.getElementById('bounces').textContent = bounces;
-                if (!checkCornerHit()) {
-                    changeColor();
+            getSize() {
+                const base = parseInt(document.getElementById('logoSize').value);
+                return { width: base * 1.6, height: base * 0.85 };
+            }
+
+            update() {
+                const size = this.getSize();
+                const targetSpeed = parseFloat(document.getElementById('speed').value);
+
+                // Smooth scale transitions
+                this.scale += (this.targetScale - this.scale) * 0.1;
+                this.targetScale = 1;
+
+                // Bounce animation decay
+                this.bounceAnimation *= 0.9;
+
+                // Normalize speed gradually
+                const currentSpeed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                if (currentSpeed > 0) {
+                    const speedDiff = targetSpeed - currentSpeed;
+                    this.vx += (this.vx / currentSpeed) * speedDiff * 0.05;
+                    this.vy += (this.vy / currentSpeed) * speedDiff * 0.05;
+                }
+
+                // Trail management
+                if (document.getElementById('showTrail').checked) {
+                    this.trail.push({
+                        x: this.x,
+                        y: this.y,
+                        color: logoColors[this.colorIndex],
+                        rotation: this.rotation
+                    });
+                    if (this.trail.length > this.maxTrail) {
+                        this.trail.shift();
+                    }
+                } else {
+                    this.trail = [];
+                }
+
+                // Movement
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Rotation physics
+                this.rotation += this.rotationSpeed;
+                this.rotationSpeed *= 0.96;
+
+                // Boundary collision detection
+                let bounced = false;
+                let cornerHit = false;
+                let hitLeft = false, hitRight = false, hitTop = false, hitBottom = false;
+
+                if (this.x <= 0) {
+                    this.x = 0;
+                    this.vx = Math.abs(this.vx);
+                    hitLeft = true;
+                    bounced = true;
+                }
+                if (this.x + size.width >= width) {
+                    this.x = width - size.width;
+                    this.vx = -Math.abs(this.vx);
+                    hitRight = true;
+                    bounced = true;
+                }
+                if (this.y <= 0) {
+                    this.y = 0;
+                    this.vy = Math.abs(this.vy);
+                    hitTop = true;
+                    bounced = true;
+                }
+                if (this.y + size.height >= height) {
+                    this.y = height - size.height;
+                    this.vy = -Math.abs(this.vy);
+                    hitBottom = true;
+                    bounced = true;
+                }
+
+                // Corner detection
+                if ((hitLeft || hitRight) && (hitTop || hitBottom)) {
+                    cornerHit = true;
+                }
+
+                // Near miss detection
+                const nearMissThreshold = 40;
+                if (bounced && !cornerHit) {
+                    const nearCorner =
+                        ((this.x < nearMissThreshold || this.x + size.width > width - nearMissThreshold) &&
+                        (this.y < nearMissThreshold || this.y + size.height > height - nearMissThreshold));
+
+                    if (nearCorner) {
+                        stats.nearMisses++;
+                        document.getElementById('nearMissCount').textContent = stats.nearMisses;
+                        showNearMiss();
+                        playNearMissSound();
+                    }
+                }
+
+                if (bounced) {
+                    // Color change
+                    this.colorIndex = (this.colorIndex + 1) % logoColors.length;
+
+                    // Spin effect
+                    this.rotationSpeed = (hitLeft ? 0.15 : 0) + (hitRight ? -0.15 : 0) +
+                                        (hitTop ? -0.1 : 0) + (hitBottom ? 0.1 : 0);
+                    this.rotationSpeed += (Math.random() - 0.5) * 0.1;
+
+                    // Squash animation
+                    this.targetScale = 0.85;
+                    this.bounceAnimation = 1;
+
+                    // Heatmap
+                    addHeatPoint(this.x + size.width / 2, this.y + size.height / 2);
+
+                    // Statistics
+                    stats.bounces++;
+                    document.getElementById('bounceCount').textContent = stats.bounces;
+                    updateCornerRate();
+
+                    if (cornerHit) {
+                        celebrateCorner(this.x + size.width / 2, this.y + size.height / 2, logoColors[this.colorIndex]);
+                    } else {
+                        playBounceSound(1 + Math.random() * 0.5);
+
+                        // Small particle burst
+                        for (let i = 0; i < 8; i++) {
+                            particles.push(new Particle(
+                                this.x + size.width / 2,
+                                this.y + size.height / 2,
+                                logoColors[this.colorIndex],
+                                'sparkle'
+                            ));
+                        }
+                    }
+                }
+
+                return { bounced, cornerHit };
+            }
+
+            draw(ctx) {
+                const size = this.getSize();
+                const style = document.getElementById('logoStyle').value;
+                const showGlow = document.getElementById('showGlow').checked;
+
+                // Draw trail
+                this.trail.forEach((point, i) => {
+                    const alpha = (i / this.trail.length) * 0.4;
+                    const trailScale = 0.4 + (i / this.trail.length) * 0.6;
+                    ctx.save();
+                    ctx.globalAlpha = alpha;
+                    ctx.translate(point.x + size.width / 2, point.y + size.height / 2);
+                    ctx.rotate(point.rotation);
+                    ctx.scale(trailScale, trailScale);
+                    ctx.translate(-size.width / 2, -size.height / 2);
+                    this.drawLogoShape(ctx, size, point.color, style, false);
+                    ctx.restore();
+                });
+
+                // Draw main logo
+                ctx.save();
+                ctx.translate(this.x + size.width / 2, this.y + size.height / 2);
+                ctx.rotate(this.rotation);
+
+                // Bounce squash/stretch
+                const squash = 1 - this.bounceAnimation * 0.15;
+                const stretch = 1 + this.bounceAnimation * 0.1;
+                ctx.scale(this.scale * stretch, this.scale * squash);
+
+                ctx.translate(-size.width / 2, -size.height / 2);
+                this.drawLogoShape(ctx, size, logoColors[this.colorIndex], style, showGlow);
+                ctx.restore();
+            }
+
+            drawLogoShape(ctx, size, color, style, glow) {
+                ctx.fillStyle = color;
+                ctx.strokeStyle = color;
+
+                if (glow) {
+                    ctx.shadowColor = color;
+                    ctx.shadowBlur = 25;
+                }
+
+                switch (style) {
+                    case 'dvd': this.drawDVD(ctx, size, color, glow); break;
+                    case 'vhs': this.drawVHS(ctx, size, color, glow); break;
+                    case 'atari': this.drawAtari(ctx, size, color, glow); break;
+                    case 'nintendo': this.drawNintendo(ctx, size, color, glow); break;
+                    case 'sega': this.drawSega(ctx, size, color, glow); break;
+                    case 'blockbuster': this.drawBlockbuster(ctx, size, color, glow); break;
+                    case 'laserdisc': this.drawLaserdisc(ctx, size, color, glow); break;
+                    case 'betamax': this.drawBetamax(ctx, size, color, glow); break;
                 }
             }
 
-            // Update trail
-            logo.trail.push({ x: logo.x, y: logo.y, color: logo.color });
-            if (logo.trail.length > 20) logo.trail.shift();
+            drawDVD(ctx, size, color, glow) {
+                // Disc
+                ctx.beginPath();
+                ctx.ellipse(size.width * 0.2, size.height * 0.5, size.height * 0.42, size.height * 0.42, 0, 0, Math.PI * 2);
+                ctx.fill();
 
-            // Update time
-            const elapsed = Math.floor((Date.now() - startTime) / 1000);
-            const mins = Math.floor(elapsed / 60);
-            const secs = elapsed % 60;
-            document.getElementById('time').textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
-        }
+                // Inner hole
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.ellipse(size.width * 0.2, size.height * 0.5, size.height * 0.12, size.height * 0.12, 0, 0, Math.PI * 2);
+                ctx.fill();
 
-        function draw() {
-            // Fade effect
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-            ctx.fillRect(0, 0, W, H);
+                // Disc shine
+                ctx.fillStyle = `rgba(255,255,255,0.3)`;
+                ctx.beginPath();
+                ctx.ellipse(size.width * 0.15, size.height * 0.4, size.height * 0.15, size.height * 0.08, -0.5, 0, Math.PI * 2);
+                ctx.fill();
 
-            update();
+                // DVD text
+                ctx.fillStyle = color;
+                ctx.font = `bold ${size.height * 0.55}px Arial`;
+                ctx.fillText('DVD', size.width * 0.4, size.height * 0.65);
 
-            // Draw trail
-            for (let i = 0; i < logo.trail.length; i++) {
-                const t = logo.trail[i];
-                const alpha = i / logo.trail.length * 0.3;
-                const scale = 0.5 + (i / logo.trail.length) * 0.5;
-                ctx.globalAlpha = alpha;
-                drawDVDLogo(t.x, t.y, t.color, scale);
+                // VIDEO subtitle
+                ctx.font = `${size.height * 0.22}px Arial`;
+                ctx.fillText('VIDEO', size.width * 0.4, size.height * 0.92);
             }
-            ctx.globalAlpha = 1;
 
-            // Draw main logo
-            drawDVDLogo(logo.x, logo.y, logo.color);
+            drawVHS(ctx, size, color, glow) {
+                // Cassette body
+                const radius = 8;
+                ctx.beginPath();
+                ctx.roundRect(0, size.height * 0.05, size.width, size.height * 0.9, radius);
+                ctx.fill();
 
-            // Draw reflection
-            ctx.globalAlpha = 0.3;
-            ctx.save();
-            ctx.translate(logo.x, logo.y + logo.height);
-            ctx.scale(1, -0.3);
-            drawDVDLogo(0, 0, logo.color);
-            ctx.restore();
-            ctx.globalAlpha = 1;
+                // Window holes
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.roundRect(size.width * 0.08, size.height * 0.2, size.width * 0.35, size.height * 0.55, 4);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.roundRect(size.width * 0.57, size.height * 0.2, size.width * 0.35, size.height * 0.55, 4);
+                ctx.fill();
 
-            requestAnimationFrame(draw);
+                // Reels
+                ctx.fillStyle = '#333';
+                ctx.beginPath();
+                ctx.arc(size.width * 0.255, size.height * 0.475, size.height * 0.2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(size.width * 0.745, size.height * 0.475, size.height * 0.2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Label
+                ctx.fillStyle = color;
+                ctx.font = `bold ${size.height * 0.28}px Arial`;
+                ctx.fillText('VHS', size.width * 0.35, size.height * 0.55);
+            }
+
+            drawAtari(ctx, size, color, glow) {
+                ctx.font = `bold ${size.height * 0.6}px Arial`;
+                ctx.fillText('ATARI', size.width * 0.08, size.height * 0.6);
+
+                // Fuji mountain logo
+                ctx.lineWidth = 4;
+                ctx.lineCap = 'round';
+
+                // Center line
+                ctx.beginPath();
+                ctx.moveTo(size.width * 0.5, size.height * 0.7);
+                ctx.lineTo(size.width * 0.5, size.height);
+                ctx.stroke();
+
+                // Side lines
+                for (let i = 0; i < 2; i++) {
+                    const offset = (i + 1) * 12;
+                    ctx.beginPath();
+                    ctx.moveTo(size.width * 0.5 - offset, size.height * 0.75);
+                    ctx.lineTo(size.width * 0.5 - offset - 3, size.height);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(size.width * 0.5 + offset, size.height * 0.75);
+                    ctx.lineTo(size.width * 0.5 + offset + 3, size.height);
+                    ctx.stroke();
+                }
+            }
+
+            drawNintendo(ctx, size, color, glow) {
+                // Rounded rectangle container
+                ctx.beginPath();
+                ctx.roundRect(size.width * 0.05, size.height * 0.15, size.width * 0.9, size.height * 0.7, 12);
+                ctx.fill();
+
+                ctx.fillStyle = '#000';
+                ctx.font = `bold ${size.height * 0.35}px Arial`;
+                ctx.fillText('NINTENDO', size.width * 0.12, size.height * 0.6);
+            }
+
+            drawSega(ctx, size, color, glow) {
+                ctx.font = `bold italic ${size.height * 0.75}px Arial`;
+                ctx.fillText('SEGA', size.width * 0.08, size.height * 0.7);
+
+                // Swoosh underline
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(0, size.height * 0.85);
+                ctx.quadraticCurveTo(size.width * 0.5, size.height * 0.95, size.width, size.height * 0.8);
+                ctx.stroke();
+            }
+
+            drawBlockbuster(ctx, size, color, glow) {
+                // Ticket shape
+                ctx.beginPath();
+                ctx.moveTo(size.width * 0.05, 0);
+                ctx.lineTo(size.width * 0.95, 0);
+                ctx.lineTo(size.width, size.height * 0.5);
+                ctx.lineTo(size.width * 0.95, size.height);
+                ctx.lineTo(size.width * 0.05, size.height);
+                ctx.lineTo(0, size.height * 0.5);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.fillStyle = '#000';
+                ctx.font = `bold ${size.height * 0.28}px Arial`;
+                ctx.fillText('BLOCK', size.width * 0.18, size.height * 0.42);
+                ctx.fillText('BUSTER', size.width * 0.15, size.height * 0.72);
+
+                // Torn ticket edge
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([4, 4]);
+                ctx.beginPath();
+                ctx.moveTo(size.width * 0.75, 0);
+                ctx.lineTo(size.width * 0.75, size.height);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            drawLaserdisc(ctx, size, color, glow) {
+                // Large disc
+                ctx.beginPath();
+                ctx.arc(size.width * 0.35, size.height * 0.5, size.height * 0.45, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Inner ring
+                ctx.fillStyle = `rgba(0,0,0,0.5)`;
+                ctx.beginPath();
+                ctx.arc(size.width * 0.35, size.height * 0.5, size.height * 0.3, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Center hole
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(size.width * 0.35, size.height * 0.5, size.height * 0.1, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Rainbow reflection
+                const gradient = ctx.createLinearGradient(0, 0, size.width * 0.7, size.height);
+                gradient.addColorStop(0, 'rgba(255,0,0,0.2)');
+                gradient.addColorStop(0.3, 'rgba(255,255,0,0.2)');
+                gradient.addColorStop(0.6, 'rgba(0,255,0,0.2)');
+                gradient.addColorStop(1, 'rgba(0,0,255,0.2)');
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(size.width * 0.35, size.height * 0.5, size.height * 0.45, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = color;
+                ctx.font = `bold ${size.height * 0.25}px Arial`;
+                ctx.fillText('LASER', size.width * 0.6, size.height * 0.45);
+                ctx.fillText('DISC', size.width * 0.65, size.height * 0.72);
+            }
+
+            drawBetamax(ctx, size, color, glow) {
+                // Cassette outline
+                ctx.beginPath();
+                ctx.roundRect(0, size.height * 0.1, size.width, size.height * 0.8, 6);
+                ctx.fill();
+
+                // Beta symbol area
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.roundRect(size.width * 0.05, size.height * 0.2, size.width * 0.3, size.height * 0.6, 4);
+                ctx.fill();
+
+                // Greek beta symbol
+                ctx.fillStyle = color;
+                ctx.font = `bold ${size.height * 0.5}px serif`;
+                ctx.fillText('\u03B2', size.width * 0.1, size.height * 0.65);
+
+                ctx.fillStyle = '#000';
+                ctx.font = `bold ${size.height * 0.25}px Arial`;
+                ctx.fillText('BETAMAX', size.width * 0.4, size.height * 0.55);
+            }
+
+            predictPath() {
+                if (!document.getElementById('showPrediction').checked) return [];
+
+                const size = this.getSize();
+                const points = [];
+                let px = this.x + size.width / 2;
+                let py = this.y + size.height / 2;
+                let pvx = this.vx;
+                let pvy = this.vy;
+                const hw = size.width / 2;
+                const hh = size.height / 2;
+
+                for (let i = 0; i < 800; i++) {
+                    px += pvx;
+                    py += pvy;
+
+                    let bounceX = false, bounceY = false;
+
+                    if (px - hw <= 0 || px + hw >= width) {
+                        pvx = -pvx;
+                        px = Math.max(hw, Math.min(width - hw, px));
+                        bounceX = true;
+                    }
+                    if (py - hh <= 0 || py + hh >= height) {
+                        pvy = -pvy;
+                        py = Math.max(hh, Math.min(height - hh, py));
+                        bounceY = true;
+                    }
+
+                    if (bounceX || bounceY) {
+                        points.push({ x: px, y: py, bounce: true, corner: bounceX && bounceY });
+                    }
+
+                    if (i % 8 === 0) {
+                        points.push({ x: px, y: py, bounce: false, corner: false });
+                    }
+                }
+
+                return points;
+            }
         }
 
-        // Add some randomness to initial velocity
-        logo.vx = 2 + Math.random() * 2;
-        logo.vy = 2 + Math.random() * 2;
-        if (Math.random() > 0.5) logo.vx = -logo.vx;
-        if (Math.random() > 0.5) logo.vy = -logo.vy;
+        // ============================================
+        // GAME STATE
+        // ============================================
+        let logos = [new Logo()];
+        let stats = {
+            bounces: 0,
+            corners: 0,
+            nearMisses: 0,
+            startTime: Date.now(),
+            streak: 0,
+            consecutiveCorners: 0
+        };
 
-        draw();
+        let heatmapData = [];
+        let showHeatmap = false;
+        let crtEnabled = false;
+
+        // Easter egg system
+        let easterEggProgress = 0;
+        const easterEggThreshold = 3;
+        let currentEasterEgg = null;
+        let easterEggTimeout = null;
+
+        // Special modes
+        let rainbowMode = false;
+        let gravityMode = false;
+        let matrixMode = false;
+        let slowMotion = false;
+        let discoMode = false;
+        let invertMode = false;
+
+        // ============================================
+        // HEATMAP FUNCTIONS
+        // ============================================
+        function addHeatPoint(x, y) {
+            heatmapData.push({ x, y, intensity: 1, time: Date.now() });
+            if (heatmapData.length > 500) {
+                heatmapData.shift();
+            }
+        }
+
+        function drawHeatmap() {
+            if (!showHeatmap) return;
+
+            // Fade existing heatmap
+            heatCtx.fillStyle = 'rgba(0, 0, 0, 0.01)';
+            heatCtx.fillRect(0, 0, width, height);
+
+            heatmapData.forEach(point => {
+                const gradient = heatCtx.createRadialGradient(
+                    point.x, point.y, 0,
+                    point.x, point.y, 60
+                );
+                gradient.addColorStop(0, `rgba(255, 50, 0, ${point.intensity * 0.4})`);
+                gradient.addColorStop(0.4, `rgba(255, 200, 0, ${point.intensity * 0.25})`);
+                gradient.addColorStop(0.7, `rgba(100, 100, 255, ${point.intensity * 0.15})`);
+                gradient.addColorStop(1, 'rgba(0, 0, 100, 0)');
+
+                heatCtx.fillStyle = gradient;
+                heatCtx.beginPath();
+                heatCtx.arc(point.x, point.y, 60, 0, Math.PI * 2);
+                heatCtx.fill();
+
+                point.intensity *= 0.998;
+            });
+
+            heatmapData = heatmapData.filter(p => p.intensity > 0.01);
+        }
+
+        // ============================================
+        // NEAR MISS DISPLAY
+        // ============================================
+        function showNearMiss() {
+            const alert = document.getElementById('nearMissAlert');
+            const phrases = ['SO CLOSE!', 'ALMOST!', 'NEARLY!', 'JUST MISSED!', 'ARGH!'];
+            alert.textContent = phrases[Math.floor(Math.random() * phrases.length)];
+            alert.classList.remove('near-miss-show');
+            void alert.offsetWidth;
+            alert.classList.add('near-miss-show');
+        }
+
+        // ============================================
+        // CORNER CELEBRATION
+        // ============================================
+        function celebrateCorner(x, y, color) {
+            stats.corners++;
+            stats.consecutiveCorners++;
+            document.getElementById('cornerCount').textContent = stats.corners;
+            updateCornerRate();
+
+            // MASSIVE particle explosion
+            for (let i = 0; i < 150; i++) {
+                particles.push(new Particle(
+                    x, y,
+                    logoColors[Math.floor(Math.random() * logoColors.length)],
+                    'corner'
+                ));
+            }
+
+            // Multiple expanding ripples
+            for (let i = 0; i < 6; i++) {
+                setTimeout(() => {
+                    ripples.push(new Ripple(
+                        x, y,
+                        logoColors[Math.floor(Math.random() * logoColors.length)],
+                        400 + i * 50
+                    ));
+                }, i * 80);
+            }
+
+            // Screen flash with radial gradient
+            const flash = document.getElementById('flashOverlay');
+            flash.style.background = `radial-gradient(circle at ${x}px ${y}px, ${color}, transparent 70%)`;
+            flash.classList.add('flash-active');
+            setTimeout(() => flash.classList.remove('flash-active'), 600);
+
+            // Celebration text
+            const alert = document.getElementById('cornerAlert');
+            const messages = [
+                'CORNER HIT!',
+                'PERFECT!',
+                'INCREDIBLE!',
+                'LEGENDARY!',
+                'IMPOSSIBLE!',
+                'GODLIKE!',
+                'ASCENDED!'
+            ];
+            const msgIndex = Math.min(stats.consecutiveCorners - 1, messages.length - 1);
+            alert.textContent = messages[msgIndex];
+            alert.style.color = color;
+            alert.classList.remove('corner-celebration');
+            void alert.offsetWidth;
+            alert.classList.add('corner-celebration');
+
+            // Audio celebration
+            playCornerFanfare();
+
+            // Easter egg progression
+            easterEggProgress++;
+            if (easterEggProgress >= easterEggThreshold && !currentEasterEgg) {
+                triggerEasterEgg();
+            }
+
+            // Update streak record
+            stats.streak = Math.max(stats.streak, stats.consecutiveCorners);
+            document.getElementById('streakCount').textContent = stats.streak;
+
+            // Screen shake effect (CSS animation would be added for full effect)
+            document.body.style.animation = 'none';
+            void document.body.offsetWidth;
+            document.body.style.animation = 'shake 0.3s ease-out';
+        }
+
+        // Add shake animation
+        const shakeStyle = document.createElement('style');
+        shakeStyle.textContent = `
+            @keyframes shake {
+                0%, 100% { transform: translateX(0); }
+                10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+                20%, 40%, 60%, 80% { transform: translateX(5px); }
+            }
+        `;
+        document.head.appendChild(shakeStyle);
+
+        // ============================================
+        // EASTER EGGS
+        // ============================================
+        function triggerEasterEgg() {
+            const eggs = [
+                { name: 'RAINBOW MODE', effect: () => { rainbowMode = true; } },
+                { name: 'GRAVITY SHIFT', effect: () => { gravityMode = true; } },
+                { name: 'MATRIX MODE', effect: () => { matrixMode = true; } },
+                { name: 'SLOW MOTION', effect: () => { slowMotion = true; } },
+                { name: 'DISCO FEVER', effect: () => { discoMode = true; } },
+                { name: 'INVERSE WORLD', effect: () => { invertMode = true; } }
+            ];
+
+            const egg = eggs[Math.floor(Math.random() * eggs.length)];
+            currentEasterEgg = egg;
+
+            const notif = document.getElementById('easterEggNotif');
+            notif.innerHTML = `SECRET UNLOCKED!<br><span style="font-size:36px">${egg.name}</span>`;
+            notif.style.display = 'block';
+
+            egg.effect();
+
+            // Clear any existing timeout
+            if (easterEggTimeout) clearTimeout(easterEggTimeout);
+
+            easterEggTimeout = setTimeout(() => {
+                notif.style.display = 'none';
+                currentEasterEgg = null;
+                easterEggProgress = 0;
+                rainbowMode = false;
+                gravityMode = false;
+                matrixMode = false;
+                slowMotion = false;
+                discoMode = false;
+                invertMode = false;
+                document.body.style.filter = '';
+            }, 12000);
+        }
+
+        // ============================================
+        // STATISTICS
+        // ============================================
+        function updateCornerRate() {
+            if (stats.bounces > 0) {
+                const rate = ((stats.corners / stats.bounces) * 100).toFixed(2);
+                document.getElementById('cornerRate').textContent = rate + '%';
+            }
+        }
+
+        function calculateCornerPrediction() {
+            if (logos.length === 0) return 'N/A';
+
+            const logo = logos[0];
+            const size = logo.getSize();
+
+            // More sophisticated prediction
+            const points = logo.predictPath();
+            const cornerPoints = points.filter(p => p.corner);
+
+            if (cornerPoints.length > 0) {
+                // Estimate time based on predicted bounces
+                const speed = Math.sqrt(logo.vx * logo.vx + logo.vy * logo.vy);
+                const bouncesToCorner = points.indexOf(cornerPoints[0]);
+                const estimatedFrames = bouncesToCorner;
+                const estimatedSeconds = estimatedFrames / 60;
+
+                if (estimatedSeconds < 60) {
+                    return `~${Math.ceil(estimatedSeconds)}s`;
+                } else if (estimatedSeconds < 3600) {
+                    return `~${Math.ceil(estimatedSeconds / 60)}m`;
+                } else {
+                    return 'Long time...';
+                }
+            }
+
+            return 'Calculating...';
+        }
+
+        // ============================================
+        // PREDICTION LINE DRAWING
+        // ============================================
+        function drawPrediction(logo) {
+            if (!document.getElementById('showPrediction').checked) return;
+
+            const points = logo.predictPath();
+            if (points.length < 2) return;
+
+            const size = logo.getSize();
+
+            ctx.save();
+
+            // Draw prediction path
+            ctx.setLineDash([8, 8]);
+            ctx.lineWidth = 2;
+
+            // Start from logo center
+            ctx.beginPath();
+            ctx.moveTo(logo.x + size.width / 2, logo.y + size.height / 2);
+
+            let segmentIndex = 0;
+            points.forEach((point, i) => {
+                const alpha = Math.max(0.05, 0.4 - (i / points.length) * 0.35);
+                ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+                ctx.lineTo(point.x, point.y);
+
+                if (point.bounce) {
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(point.x, point.y);
+                    segmentIndex++;
+                }
+            });
+            ctx.stroke();
+
+            // Draw bounce indicators
+            const bouncePoints = points.filter(p => p.bounce);
+            bouncePoints.slice(0, 8).forEach((point, i) => {
+                const alpha = 0.8 - i * 0.1;
+                const radius = point.corner ? 12 : 6;
+
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+
+                if (point.corner) {
+                    // Corner indicator - special styling
+                    ctx.fillStyle = `rgba(255, 215, 0, ${alpha})`;
+                    ctx.fill();
+                    ctx.strokeStyle = `rgba(255, 100, 100, ${alpha})`;
+                    ctx.lineWidth = 3;
+                    ctx.setLineDash([]);
+                    ctx.stroke();
+
+                    // Pulsing ring around predicted corner
+                    ctx.beginPath();
+                    ctx.arc(point.x, point.y, radius + 5 + Math.sin(Date.now() / 100) * 3, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(255, 255, 0, ${alpha * 0.5})`;
+                    ctx.stroke();
+                } else {
+                    ctx.fillStyle = `rgba(255, 255, 0, ${alpha * 0.6})`;
+                    ctx.fill();
+                }
+            });
+
+            ctx.restore();
+        }
+
+        // ============================================
+        // MAIN ANIMATION LOOP
+        // ============================================
+        let lastTime = 0;
+        let frameCount = 0;
+
+        function animate(timestamp) {
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+            frameCount++;
+
+            // Apply special mode effects
+            if (invertMode) {
+                document.body.style.filter = 'invert(1)';
+            }
+
+            // Clear canvas with fade effect
+            if (matrixMode) {
+                ctx.fillStyle = 'rgba(0, 20, 0, 0.15)';
+            } else {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+            }
+            ctx.fillRect(0, 0, width, height);
+
+            // Disco background
+            if (discoMode) {
+                ctx.fillStyle = `hsla(${(Date.now() / 20) % 360}, 60%, 8%, 0.3)`;
+                ctx.fillRect(0, 0, width, height);
+            }
+
+            // Draw heatmap layer
+            drawHeatmap();
+
+            // Update and draw particles
+            particles = particles.filter(p => p.life > 0);
+            particles.forEach(p => {
+                if (!slowMotion || frameCount % 3 === 0) {
+                    p.update();
+                }
+                p.draw(ctx);
+            });
+
+            // Update and draw ripples
+            ripples = ripples.filter(r => r.life > 0);
+            ripples.forEach(r => {
+                if (!slowMotion || frameCount % 2 === 0) {
+                    r.update();
+                }
+                r.draw(ctx);
+            });
+
+            // Update and draw logos
+            let anyCornerHit = false;
+            logos.forEach(logo => {
+                // Apply gravity mode
+                if (gravityMode) {
+                    logo.vy += 0.08;
+                    // Dampen horizontal movement
+                    logo.vx *= 0.999;
+                }
+
+                // Slow motion - skip some updates
+                if (!slowMotion || frameCount % 3 === 0) {
+                    const result = logo.update();
+                    if (result.cornerHit) anyCornerHit = true;
+                    if (result.bounced && !result.cornerHit) {
+                        stats.consecutiveCorners = 0;
+                    }
+                }
+
+                // Rainbow mode - fast color cycling
+                if (rainbowMode) {
+                    logo.colorIndex = Math.floor(Date.now() / 80) % logoColors.length;
+                }
+
+                // Draw prediction for first logo
+                if (logos.indexOf(logo) === 0) {
+                    drawPrediction(logo);
+                }
+
+                logo.draw(ctx);
+            });
+
+            // Update time display
+            const elapsed = Math.floor((Date.now() - stats.startTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            document.getElementById('timeRunning').textContent =
+                `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+            // Update corner prediction periodically
+            if (frameCount % 60 === 0) {
+                document.getElementById('cornerPrediction').textContent = calculateCornerPrediction();
+            }
+
+            // CRT flicker effect
+            if (crtEnabled && Math.random() < 0.008) {
+                document.getElementById('crtOverlay').classList.add('crt-flicker');
+                setTimeout(() => {
+                    document.getElementById('crtOverlay').classList.remove('crt-flicker');
+                }, 100 + Math.random() * 100);
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        // ============================================
+        // CONTROL FUNCTIONS
+        // ============================================
+        function toggleCRT() {
+            crtEnabled = !crtEnabled;
+            document.getElementById('crtOverlay').classList.toggle('active', crtEnabled);
+        }
+
+        function toggleHeatmap() {
+            showHeatmap = !showHeatmap;
+            if (!showHeatmap) {
+                heatCtx.clearRect(0, 0, width, height);
+            }
+        }
+
+        function resetStats() {
+            stats = {
+                bounces: 0,
+                corners: 0,
+                nearMisses: 0,
+                startTime: Date.now(),
+                streak: 0,
+                consecutiveCorners: 0
+            };
+            document.getElementById('bounceCount').textContent = '0';
+            document.getElementById('cornerCount').textContent = '0';
+            document.getElementById('nearMissCount').textContent = '0';
+            document.getElementById('streakCount').textContent = '0';
+            document.getElementById('cornerRate').textContent = '0%';
+            heatmapData = [];
+            heatCtx.clearRect(0, 0, width, height);
+            easterEggProgress = 0;
+        }
+
+        function forceCorner() {
+            if (logos.length > 0) {
+                const logo = logos[0];
+                const size = logo.getSize();
+                // Teleport to corner
+                const corners = [
+                    { x: 0, y: 0, vx: 1, vy: 1 },
+                    { x: width - size.width, y: 0, vx: -1, vy: 1 },
+                    { x: 0, y: height - size.height, vx: 1, vy: -1 },
+                    { x: width - size.width, y: height - size.height, vx: -1, vy: -1 }
+                ];
+                const corner = corners[Math.floor(Math.random() * corners.length)];
+                logo.x = corner.x;
+                logo.y = corner.y;
+                const speed = parseFloat(document.getElementById('speed').value);
+                logo.vx = corner.vx * speed;
+                logo.vy = corner.vy * speed;
+            }
+        }
+
+        function chaosMode() {
+            const count = 25;
+            logos = [];
+            for (let i = 0; i < count; i++) {
+                logos.push(new Logo());
+            }
+            document.getElementById('logoCount').value = count;
+            document.getElementById('logoCountDisplay').textContent = count;
+
+            // Visual feedback
+            for (let i = 0; i < 50; i++) {
+                particles.push(new Particle(
+                    width / 2, height / 2,
+                    logoColors[Math.floor(Math.random() * logoColors.length)],
+                    'corner'
+                ));
+            }
+        }
+
+        function toggleControls() {
+            document.getElementById('controls').classList.toggle('minimized');
+        }
+
+        // ============================================
+        // EVENT LISTENERS
+        // ============================================
+        document.getElementById('logoCount').addEventListener('input', function() {
+            const count = parseInt(this.value);
+            document.getElementById('logoCountDisplay').textContent = count;
+
+            while (logos.length < count) {
+                logos.push(new Logo());
+            }
+            while (logos.length > count) {
+                logos.pop();
+            }
+        });
+
+        document.getElementById('speed').addEventListener('input', function() {
+            document.getElementById('speedDisplay').textContent = this.value;
+        });
+
+        document.getElementById('logoSize').addEventListener('input', function() {
+            document.getElementById('sizeDisplay').textContent = this.value;
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            switch(e.key.toLowerCase()) {
+                case 'c':
+                    toggleCRT();
+                    break;
+                case 'h':
+                    toggleHeatmap();
+                    break;
+                case 'p':
+                    const predCheck = document.getElementById('showPrediction');
+                    predCheck.checked = !predCheck.checked;
+                    break;
+                case 't':
+                    const trailCheck = document.getElementById('showTrail');
+                    trailCheck.checked = !trailCheck.checked;
+                    break;
+                case 'r':
+                    resetStats();
+                    break;
+                case ' ':
+                    e.preventDefault();
+                    chaosMode();
+                    break;
+                case 'g':
+                    const glowCheck = document.getElementById('showGlow');
+                    glowCheck.checked = !glowCheck.checked;
+                    break;
+                case 's':
+                    const soundCheck = document.getElementById('soundEnabled');
+                    soundCheck.checked = !soundCheck.checked;
+                    break;
+            }
+        });
+
+        // Click to add logo
+        mainCanvas.addEventListener('click', (e) => {
+            if (e.shiftKey) {
+                const size = logos[0]?.getSize() || { width: 150, height: 80 };
+                logos.push(new Logo(e.clientX - size.width / 2, e.clientY - size.height / 2));
+                document.getElementById('logoCount').value = logos.length;
+                document.getElementById('logoCountDisplay').textContent = logos.length;
+
+                // Visual feedback
+                for (let i = 0; i < 10; i++) {
+                    particles.push(new Particle(e.clientX, e.clientY, logoColors[Math.floor(Math.random() * logoColors.length)], 'sparkle'));
+                }
+            }
+        });
+
+        // Initialize audio on first interaction
+        document.addEventListener('click', () => initAudio(), { once: true });
+        document.addEventListener('keydown', () => initAudio(), { once: true });
+
+        // ============================================
+        // START THE SHOW
+        // ============================================
+        heatCtx.fillStyle = '#000';
+        heatCtx.fillRect(0, 0, width, height);
+        requestAnimationFrame(animate);
     </script>
 </body>
 </html>

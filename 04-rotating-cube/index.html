@@ -3,414 +3,1283 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Rotating Cube</title>
+    <title>Spectacular 3D Canvas Engine</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #0f0f23 100%);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            background: #000;
+            overflow: hidden;
             font-family: 'Segoe UI', system-ui, sans-serif;
             color: #fff;
-            overflow: hidden;
         }
-        h1 {
+        #mainCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        #ui {
             position: fixed;
             top: 20px;
-            font-size: 1.3rem;
-            text-shadow: 0 0 20px rgba(255, 100, 255, 0.5);
+            left: 20px;
             z-index: 100;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 15px;
+            border: 1px solid rgba(255,255,255,0.1);
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+            width: 280px;
         }
-        canvas {
-            border-radius: 10px;
+        #ui::-webkit-scrollbar { width: 6px; }
+        #ui::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 3px; }
+        .control-group {
+            margin-bottom: 15px;
         }
-        .controls {
-            position: fixed;
-            bottom: 20px;
-            display: flex;
-            gap: 15px;
-            z-index: 100;
+        .control-group label {
+            display: block;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #888;
+            margin-bottom: 6px;
         }
-        button {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            background: linear-gradient(135deg, #ff00ff, #cc00cc);
+        select, input[type="range"] {
+            width: 100%;
+            padding: 8px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 8px;
             color: #fff;
+            font-size: 13px;
             cursor: pointer;
-            font-size: 0.9rem;
-            transition: transform 0.2s, box-shadow 0.2s;
         }
-        button:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 20px rgba(255, 0, 255, 0.5);
+        select:hover, input[type="range"]:hover {
+            background: rgba(255,255,255,0.15);
         }
-        .info {
+        select option { background: #222; }
+        input[type="range"] {
+            -webkit-appearance: none;
+            height: 6px;
+            padding: 0;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: linear-gradient(135deg, #00d4ff, #7b2ff7);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            flex: 1;
+            min-width: 70px;
+            padding: 8px 12px;
+            background: linear-gradient(135deg, rgba(0,212,255,0.3), rgba(123,47,247,0.3));
+            border: 1px solid rgba(0,212,255,0.5);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            background: linear-gradient(135deg, rgba(0,212,255,0.5), rgba(123,47,247,0.5));
+            transform: translateY(-1px);
+        }
+        .btn.active {
+            background: linear-gradient(135deg, #00d4ff, #7b2ff7);
+        }
+        h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            background: linear-gradient(135deg, #00d4ff, #7b2ff7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .stats {
             position: fixed;
-            bottom: 70px;
-            font-size: 0.9rem;
-            opacity: 0.6;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(10px);
+            padding: 15px 20px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-family: monospace;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .color-picker {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+        .color-swatch {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .color-swatch:hover, .color-swatch.active {
+            transform: scale(1.1);
+            border-color: #fff;
+        }
+        .separator {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            margin: 15px 0;
         }
     </style>
 </head>
 <body>
-    <h1>3D Rotating Cube with Perspective</h1>
-    <canvas id="canvas"></canvas>
-    <div class="info">Drag to rotate manually | Scroll to zoom</div>
-    <div class="controls">
-        <button onclick="toggleAuto()">Toggle Auto-Rotate</button>
-        <button onclick="changeStyle()">Change Style</button>
-        <button onclick="resetView()">Reset View</button>
-        <button onclick="addCube()">Add Cube</button>
+    <canvas id="mainCanvas"></canvas>
+
+    <div id="ui">
+        <h2>3D Canvas Engine</h2>
+
+        <div class="control-group">
+            <label>Shape</label>
+            <select id="shapeSelect">
+                <option value="cube">Cube</option>
+                <option value="tetrahedron">Tetrahedron</option>
+                <option value="octahedron">Octahedron</option>
+                <option value="dodecahedron">Dodecahedron</option>
+                <option value="icosahedron">Icosahedron</option>
+                <option value="torus">Torus</option>
+                <option value="sphere">Sphere</option>
+                <option value="cylinder">Cylinder</option>
+                <option value="custom">Stellated Dodecahedron</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>Render Mode</label>
+            <select id="renderSelect">
+                <option value="hologram">Hologram</option>
+                <option value="wireframe">Wireframe</option>
+                <option value="solid">Solid</option>
+                <option value="glass">Glass</option>
+                <option value="chrome">Chrome</option>
+                <option value="neon">Neon Glow</option>
+                <option value="gradient">Gradient</option>
+                <option value="xray">X-Ray</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>Animation</label>
+            <select id="animSelect">
+                <option value="rotate">Auto Rotate</option>
+                <option value="bounce">Bounce</option>
+                <option value="pulse">Pulse</option>
+                <option value="orbit">Orbit</option>
+                <option value="morph">Shape Morph</option>
+                <option value="explode">Explode</option>
+                <option value="none">None</option>
+            </select>
+        </div>
+
+        <div class="separator"></div>
+
+        <div class="control-group">
+            <label>Primary Color</label>
+            <div class="color-picker" id="colorPicker">
+                <div class="color-swatch active" style="background: linear-gradient(135deg, #00d4ff, #7b2ff7);" data-color="cyan"></div>
+                <div class="color-swatch" style="background: linear-gradient(135deg, #ff0080, #ff8c00);" data-color="magenta"></div>
+                <div class="color-swatch" style="background: linear-gradient(135deg, #00ff88, #00d4ff);" data-color="green"></div>
+                <div class="color-swatch" style="background: linear-gradient(135deg, #ff4444, #ff0080);" data-color="red"></div>
+                <div class="color-swatch" style="background: linear-gradient(135deg, #ffdd00, #ff8c00);" data-color="gold"></div>
+                <div class="color-swatch" style="background: linear-gradient(135deg, #fff, #888);" data-color="white"></div>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Rotation Speed</label>
+            <input type="range" id="speedSlider" min="0" max="200" value="50">
+        </div>
+
+        <div class="control-group">
+            <label>Scale</label>
+            <input type="range" id="scaleSlider" min="20" max="200" value="100">
+        </div>
+
+        <div class="control-group">
+            <label>FOV</label>
+            <input type="range" id="fovSlider" min="30" max="120" value="60">
+        </div>
+
+        <div class="separator"></div>
+
+        <div class="control-group">
+            <label>Effects</label>
+            <div class="btn-row">
+                <button class="btn active" id="bloomBtn">Bloom</button>
+                <button class="btn active" id="starsBtn">Stars</button>
+                <button class="btn" id="gridBtn">Grid</button>
+            </div>
+            <div class="btn-row" style="margin-top: 8px;">
+                <button class="btn" id="reflectBtn">Reflect</button>
+                <button class="btn active" id="shadowBtn">Shadow</button>
+                <button class="btn" id="trailBtn">Trail</button>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Scene</label>
+            <div class="btn-row">
+                <button class="btn" id="satellitesBtn">Satellites</button>
+                <button class="btn" id="nestedBtn">Nested</button>
+                <button class="btn" id="particlesBtn">Particles</button>
+            </div>
+        </div>
+
+        <div class="separator"></div>
+
+        <div class="control-group">
+            <label>Actions</label>
+            <div class="btn-row">
+                <button class="btn" id="resetBtn">Reset View</button>
+                <button class="btn" id="screenshotBtn">Screenshot</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats" id="stats">
+        FPS: <span id="fpsDisplay">60</span><br>
+        Faces: <span id="faceDisplay">0</span><br>
+        Vertices: <span id="vertDisplay">0</span>
     </div>
 
     <script>
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
+    // ==================== 3D MATH ENGINE ====================
+    const Vec3 = {
+        create: (x = 0, y = 0, z = 0) => ({ x, y, z }),
+        add: (a, b) => ({ x: a.x + b.x, y: a.y + b.y, z: a.z + b.z }),
+        sub: (a, b) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z }),
+        mul: (v, s) => ({ x: v.x * s, y: v.y * s, z: v.z * s }),
+        dot: (a, b) => a.x * b.x + a.y * b.y + a.z * b.z,
+        cross: (a, b) => ({
+            x: a.y * b.z - a.z * b.y,
+            y: a.z * b.x - a.x * b.z,
+            z: a.x * b.y - a.y * b.x
+        }),
+        length: (v) => Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z),
+        normalize: (v) => {
+            const len = Vec3.length(v);
+            return len > 0 ? Vec3.mul(v, 1 / len) : v;
+        },
+        lerp: (a, b, t) => ({
+            x: a.x + (b.x - a.x) * t,
+            y: a.y + (b.y - a.y) * t,
+            z: a.z + (b.z - a.z) * t
+        })
+    };
 
-        let W, H;
-        function resize() {
-            W = canvas.width = window.innerWidth;
-            H = canvas.height = window.innerHeight;
-        }
-        resize();
-        window.addEventListener('resize', resize);
-
-        // State
-        let autoRotate = true;
-        let styleIndex = 0;
-        const styles = ['neon', 'wireframe', 'solid', 'gradient', 'rainbow'];
-        let zoom = 1;
-
-        // Rotation
-        let angleX = 0, angleY = 0, angleZ = 0;
-        let targetAngleX = 0, targetAngleY = 0;
-        let velocityX = 0.01, velocityY = 0.015, velocityZ = 0.005;
-
-        // Multiple cubes
-        let cubes = [{ x: 0, y: 0, z: 0, size: 150, phase: 0 }];
-
-        // Cube vertices (centered at origin)
-        function getCubeVertices(size) {
-            const s = size / 2;
+    const Mat4 = {
+        identity: () => [
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1
+        ],
+        multiply: (a, b) => {
+            const r = new Array(16);
+            for (let i = 0; i < 4; i++) {
+                for (let j = 0; j < 4; j++) {
+                    r[i * 4 + j] =
+                        a[i * 4 + 0] * b[0 * 4 + j] +
+                        a[i * 4 + 1] * b[1 * 4 + j] +
+                        a[i * 4 + 2] * b[2 * 4 + j] +
+                        a[i * 4 + 3] * b[3 * 4 + j];
+                }
+            }
+            return r;
+        },
+        rotateX: (angle) => {
+            const c = Math.cos(angle), s = Math.sin(angle);
+            return [1, 0, 0, 0, 0, c, -s, 0, 0, s, c, 0, 0, 0, 0, 1];
+        },
+        rotateY: (angle) => {
+            const c = Math.cos(angle), s = Math.sin(angle);
+            return [c, 0, s, 0, 0, 1, 0, 0, -s, 0, c, 0, 0, 0, 0, 1];
+        },
+        rotateZ: (angle) => {
+            const c = Math.cos(angle), s = Math.sin(angle);
+            return [c, -s, 0, 0, s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+        },
+        scale: (sx, sy, sz) => [sx, 0, 0, 0, 0, sy, 0, 0, 0, 0, sz, 0, 0, 0, 0, 1],
+        translate: (tx, ty, tz) => [1, 0, 0, tx, 0, 1, 0, ty, 0, 0, 1, tz, 0, 0, 0, 1],
+        perspective: (fov, aspect, near, far) => {
+            const f = 1 / Math.tan(fov / 2);
+            const nf = 1 / (near - far);
             return [
-                [-s, -s, -s], [s, -s, -s], [s, s, -s], [-s, s, -s],
-                [-s, -s, s], [s, -s, s], [s, s, s], [-s, s, s]
+                f / aspect, 0, 0, 0,
+                0, f, 0, 0,
+                0, 0, (far + near) * nf, 2 * far * near * nf,
+                0, 0, -1, 0
             ];
-        }
-
-        // Cube edges
-        const edges = [
-            [0,1], [1,2], [2,3], [3,0],
-            [4,5], [5,6], [6,7], [7,4],
-            [0,4], [1,5], [2,6], [3,7]
-        ];
-
-        // Cube faces (indices)
-        const faces = [
-            { verts: [0,1,2,3], color: '#ff0066' }, // back
-            { verts: [4,5,6,7], color: '#00ff66' }, // front
-            { verts: [0,1,5,4], color: '#6600ff' }, // bottom
-            { verts: [2,3,7,6], color: '#ff6600' }, // top
-            { verts: [0,3,7,4], color: '#00ffff' }, // left
-            { verts: [1,2,6,5], color: '#ffff00' }  // right
-        ];
-
-        // 3D rotation
-        function rotatePoint(p, ax, ay, az) {
-            let [x, y, z] = p;
-
-            // X rotation
-            let y1 = y * Math.cos(ax) - z * Math.sin(ax);
-            let z1 = y * Math.sin(ax) + z * Math.cos(ax);
-            y = y1; z = z1;
-
-            // Y rotation
-            let x1 = x * Math.cos(ay) + z * Math.sin(ay);
-            z1 = -x * Math.sin(ay) + z * Math.cos(ay);
-            x = x1; z = z1;
-
-            // Z rotation
-            x1 = x * Math.cos(az) - y * Math.sin(az);
-            y1 = x * Math.sin(az) + y * Math.cos(az);
-
-            return [x1, y1, z1];
-        }
-
-        // Perspective projection
-        function project(p, offsetX = 0, offsetY = 0, offsetZ = 0) {
-            const fov = 500 * zoom;
-            const distance = 600;
-            const x = p[0] + offsetX;
-            const y = p[1] + offsetY;
-            const z = p[2] + offsetZ;
-            const scale = fov / (distance - z);
+        },
+        transformPoint: (m, p) => {
+            const w = m[12] * p.x + m[13] * p.y + m[14] * p.z + m[15];
             return {
-                x: W/2 + x * scale,
-                y: H/2 + y * scale,
-                scale: scale,
-                z: z
+                x: (m[0] * p.x + m[1] * p.y + m[2] * p.z + m[3]) / w,
+                y: (m[4] * p.x + m[5] * p.y + m[6] * p.z + m[7]) / w,
+                z: (m[8] * p.x + m[9] * p.y + m[10] * p.z + m[11]) / w
             };
         }
+    };
 
-        // Calculate face normal (for back-face culling and lighting)
-        function getFaceNormal(verts, indices) {
-            const v0 = verts[indices[0]];
-            const v1 = verts[indices[1]];
-            const v2 = verts[indices[2]];
+    // ==================== SHAPE GENERATORS ====================
+    const Shapes = {
+        cube: () => {
+            const v = [];
+            const f = [];
+            const s = 1;
+            for (let z = -1; z <= 1; z += 2)
+                for (let y = -1; y <= 1; y += 2)
+                    for (let x = -1; x <= 1; x += 2)
+                        v.push(Vec3.create(x * s, y * s, z * s));
+            f.push([0, 2, 6, 4]);
+            f.push([1, 5, 7, 3]);
+            f.push([0, 4, 5, 1]);
+            f.push([2, 3, 7, 6]);
+            f.push([0, 1, 3, 2]);
+            f.push([4, 6, 7, 5]);
+            return { vertices: v, faces: f };
+        },
 
-            const ax = v1[0] - v0[0], ay = v1[1] - v0[1], az = v1[2] - v0[2];
-            const bx = v2[0] - v0[0], by = v2[1] - v0[1], bz = v2[2] - v0[2];
+        tetrahedron: () => {
+            const v = [];
+            const a = 1.5;
+            v.push(Vec3.create(a, a, a));
+            v.push(Vec3.create(a, -a, -a));
+            v.push(Vec3.create(-a, a, -a));
+            v.push(Vec3.create(-a, -a, a));
+            const f = [[0, 1, 2], [0, 3, 1], [0, 2, 3], [1, 3, 2]];
+            return { vertices: v, faces: f };
+        },
 
-            return {
-                x: ay*bz - az*by,
-                y: az*bx - ax*bz,
-                z: ax*by - ay*bx
-            };
-        }
+        octahedron: () => {
+            const v = [];
+            const a = 1.5;
+            v.push(Vec3.create(a, 0, 0));
+            v.push(Vec3.create(-a, 0, 0));
+            v.push(Vec3.create(0, a, 0));
+            v.push(Vec3.create(0, -a, 0));
+            v.push(Vec3.create(0, 0, a));
+            v.push(Vec3.create(0, 0, -a));
+            const f = [
+                [0, 2, 4], [0, 4, 3], [0, 3, 5], [0, 5, 2],
+                [1, 4, 2], [1, 3, 4], [1, 5, 3], [1, 2, 5]
+            ];
+            return { vertices: v, faces: f };
+        },
 
-        function drawCube(cube, time) {
-            const vertices = getCubeVertices(cube.size);
-            const phase = cube.phase;
+        icosahedron: () => {
+            const phi = (1 + Math.sqrt(5)) / 2;
+            const a = 1;
+            const b = a / phi;
+            const v = [
+                Vec3.create(0, b, -a), Vec3.create(b, a, 0), Vec3.create(-b, a, 0),
+                Vec3.create(0, b, a), Vec3.create(0, -b, a), Vec3.create(-a, 0, b),
+                Vec3.create(0, -b, -a), Vec3.create(a, 0, -b), Vec3.create(a, 0, b),
+                Vec3.create(-a, 0, -b), Vec3.create(b, -a, 0), Vec3.create(-b, -a, 0)
+            ];
+            const f = [
+                [0, 1, 2], [3, 2, 1], [3, 4, 5], [3, 8, 4], [0, 6, 7],
+                [0, 9, 6], [4, 10, 11], [6, 11, 10], [2, 5, 9], [11, 9, 5],
+                [1, 7, 8], [10, 8, 7], [3, 5, 2], [3, 1, 8], [0, 2, 9],
+                [0, 7, 1], [6, 9, 11], [6, 10, 7], [4, 11, 5], [4, 8, 10]
+            ];
+            return { vertices: v, faces: f };
+        },
 
-            // Rotate vertices
-            const rotated = vertices.map(v =>
-                rotatePoint(v, angleX + phase, angleY + phase * 0.5, angleZ + phase * 0.3)
-            );
+        dodecahedron: () => {
+            const phi = (1 + Math.sqrt(5)) / 2;
+            const a = 0.8;
+            const b = a / phi;
+            const c = a * phi;
+            const v = [
+                Vec3.create(a, a, a), Vec3.create(a, a, -a), Vec3.create(a, -a, a),
+                Vec3.create(a, -a, -a), Vec3.create(-a, a, a), Vec3.create(-a, a, -a),
+                Vec3.create(-a, -a, a), Vec3.create(-a, -a, -a),
+                Vec3.create(0, b, c), Vec3.create(0, b, -c), Vec3.create(0, -b, c),
+                Vec3.create(0, -b, -c), Vec3.create(b, c, 0), Vec3.create(b, -c, 0),
+                Vec3.create(-b, c, 0), Vec3.create(-b, -c, 0),
+                Vec3.create(c, 0, b), Vec3.create(c, 0, -b), Vec3.create(-c, 0, b),
+                Vec3.create(-c, 0, -b)
+            ];
+            const f = [
+                [0, 8, 4, 14, 12], [0, 12, 1, 17, 16], [0, 16, 2, 10, 8],
+                [1, 12, 14, 5, 9], [1, 9, 11, 3, 17], [2, 16, 17, 3, 13],
+                [2, 13, 15, 6, 10], [4, 8, 10, 6, 18], [4, 18, 19, 5, 14],
+                [3, 11, 7, 15, 13], [5, 19, 7, 11, 9], [6, 15, 7, 19, 18]
+            ];
+            return { vertices: v, faces: f };
+        },
 
-            // Project vertices
-            const projected = rotated.map(v => project(v, cube.x, cube.y, cube.z));
-
-            // Sort faces by depth
-            const sortedFaces = faces.map((face, i) => {
-                const avgZ = face.verts.reduce((sum, vi) => sum + rotated[vi][2], 0) / 4;
-                return { ...face, index: i, avgZ };
-            }).sort((a, b) => a.avgZ - b.avgZ);
-
-            // Draw based on style
-            if (styles[styleIndex] === 'wireframe') {
-                drawWireframe(projected, rotated, time);
-            } else if (styles[styleIndex] === 'neon') {
-                drawNeon(projected, rotated, sortedFaces, time);
-            } else if (styles[styleIndex] === 'solid') {
-                drawSolid(projected, rotated, sortedFaces);
-            } else if (styles[styleIndex] === 'gradient') {
-                drawGradient(projected, rotated, sortedFaces);
-            } else if (styles[styleIndex] === 'rainbow') {
-                drawRainbow(projected, rotated, sortedFaces, time);
-            }
-        }
-
-        function drawWireframe(projected, rotated, time) {
-            ctx.strokeStyle = `hsl(${(time * 50) % 360}, 100%, 60%)`;
-            ctx.lineWidth = 2;
-            ctx.shadowColor = ctx.strokeStyle;
-            ctx.shadowBlur = 15;
-
-            for (let [i, j] of edges) {
-                ctx.beginPath();
-                ctx.moveTo(projected[i].x, projected[i].y);
-                ctx.lineTo(projected[j].x, projected[j].y);
-                ctx.stroke();
-            }
-            ctx.shadowBlur = 0;
-
-            // Draw vertices
-            for (let p of projected) {
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, 5 * p.scale, 0, Math.PI * 2);
-                ctx.fillStyle = '#fff';
-                ctx.fill();
-            }
-        }
-
-        function drawNeon(projected, rotated, sortedFaces, time) {
-            for (let face of sortedFaces) {
-                const normal = getFaceNormal(rotated, face.verts);
-                if (normal.z < 0) continue;
-
-                const hue = (time * 30 + face.index * 60) % 360;
-
-                ctx.beginPath();
-                ctx.moveTo(projected[face.verts[0]].x, projected[face.verts[0]].y);
-                for (let i = 1; i < face.verts.length; i++) {
-                    ctx.lineTo(projected[face.verts[i]].x, projected[face.verts[i]].y);
+        torus: (R = 1.2, r = 0.4, segments = 24, tubes = 16) => {
+            const v = [];
+            const f = [];
+            for (let i = 0; i < segments; i++) {
+                const theta = (i / segments) * Math.PI * 2;
+                for (let j = 0; j < tubes; j++) {
+                    const phi = (j / tubes) * Math.PI * 2;
+                    const x = (R + r * Math.cos(phi)) * Math.cos(theta);
+                    const y = r * Math.sin(phi);
+                    const z = (R + r * Math.cos(phi)) * Math.sin(theta);
+                    v.push(Vec3.create(x, y, z));
                 }
-                ctx.closePath();
+            }
+            for (let i = 0; i < segments; i++) {
+                for (let j = 0; j < tubes; j++) {
+                    const a = i * tubes + j;
+                    const b = i * tubes + (j + 1) % tubes;
+                    const c = ((i + 1) % segments) * tubes + (j + 1) % tubes;
+                    const d = ((i + 1) % segments) * tubes + j;
+                    f.push([a, b, c, d]);
+                }
+            }
+            return { vertices: v, faces: f };
+        },
 
-                ctx.fillStyle = `hsla(${hue}, 100%, 50%, 0.1)`;
-                ctx.fill();
+        sphere: (radius = 1.2, latBands = 16, longBands = 24) => {
+            const v = [];
+            const f = [];
+            for (let lat = 0; lat <= latBands; lat++) {
+                const theta = (lat / latBands) * Math.PI;
+                const sinTheta = Math.sin(theta);
+                const cosTheta = Math.cos(theta);
+                for (let long = 0; long <= longBands; long++) {
+                    const phi = (long / longBands) * Math.PI * 2;
+                    const x = radius * sinTheta * Math.cos(phi);
+                    const y = radius * cosTheta;
+                    const z = radius * sinTheta * Math.sin(phi);
+                    v.push(Vec3.create(x, y, z));
+                }
+            }
+            for (let lat = 0; lat < latBands; lat++) {
+                for (let long = 0; long < longBands; long++) {
+                    const a = lat * (longBands + 1) + long;
+                    const b = a + longBands + 1;
+                    f.push([a, b, b + 1, a + 1]);
+                }
+            }
+            return { vertices: v, faces: f };
+        },
 
-                ctx.strokeStyle = `hsl(${hue}, 100%, 60%)`;
-                ctx.lineWidth = 3;
-                ctx.shadowColor = `hsl(${hue}, 100%, 60%)`;
-                ctx.shadowBlur = 20;
-                ctx.stroke();
-                ctx.shadowBlur = 0;
+        cylinder: (radius = 0.8, height = 2, segments = 24) => {
+            const v = [];
+            const f = [];
+            const h = height / 2;
+            for (let i = 0; i <= segments; i++) {
+                const angle = (i / segments) * Math.PI * 2;
+                const x = radius * Math.cos(angle);
+                const z = radius * Math.sin(angle);
+                v.push(Vec3.create(x, h, z));
+                v.push(Vec3.create(x, -h, z));
+            }
+            for (let i = 0; i < segments; i++) {
+                const a = i * 2, b = i * 2 + 1;
+                const c = (i + 1) * 2 + 1, d = (i + 1) * 2;
+                f.push([a, d, c, b]);
+            }
+            const topCenter = v.length;
+            v.push(Vec3.create(0, h, 0));
+            const bottomCenter = v.length;
+            v.push(Vec3.create(0, -h, 0));
+            const topFace = [];
+            const bottomFace = [];
+            for (let i = 0; i < segments; i++) {
+                topFace.push(i * 2);
+                bottomFace.unshift(i * 2 + 1);
+            }
+            f.push(topFace);
+            f.push(bottomFace);
+            return { vertices: v, faces: f };
+        },
+
+        custom: () => {
+            const base = Shapes.dodecahedron();
+            const v = [...base.vertices];
+            const f = [];
+            base.faces.forEach(face => {
+                const center = Vec3.create(0, 0, 0);
+                face.forEach(i => {
+                    center.x += v[i].x;
+                    center.y += v[i].y;
+                    center.z += v[i].z;
+                });
+                center.x /= face.length;
+                center.y /= face.length;
+                center.z /= face.length;
+                const spike = Vec3.mul(Vec3.normalize(center), 2);
+                const spikeIdx = v.length;
+                v.push(spike);
+                for (let i = 0; i < face.length; i++) {
+                    const next = (i + 1) % face.length;
+                    f.push([face[i], face[next], spikeIdx]);
+                }
+            });
+            return { vertices: v, faces: f };
+        }
+    };
+
+    // ==================== MAIN ENGINE ====================
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const state = {
+        shape: 'cube',
+        renderMode: 'hologram',
+        animation: 'rotate',
+        color: 'cyan',
+        speed: 50,
+        scale: 100,
+        fov: 60,
+        bloom: true,
+        stars: true,
+        grid: false,
+        reflect: false,
+        shadow: true,
+        trail: false,
+        satellites: false,
+        nested: false,
+        particles: false,
+        rotX: 0.3,
+        rotY: 0,
+        rotZ: 0,
+        camDist: 6,
+        dragStart: null,
+        isDragging: false,
+        lastMouse: { x: 0, y: 0 },
+        targetRotX: 0.3,
+        targetRotY: 0,
+        morphProgress: 0,
+        morphFrom: null,
+        morphTo: null
+    };
+
+    const colors = {
+        cyan: { primary: '#00d4ff', secondary: '#7b2ff7', glow: 'rgba(0,212,255,', face: 'rgba(0,180,255,' },
+        magenta: { primary: '#ff0080', secondary: '#ff8c00', glow: 'rgba(255,0,128,', face: 'rgba(255,100,150,' },
+        green: { primary: '#00ff88', secondary: '#00d4ff', glow: 'rgba(0,255,136,', face: 'rgba(0,200,100,' },
+        red: { primary: '#ff4444', secondary: '#ff0080', glow: 'rgba(255,68,68,', face: 'rgba(255,100,100,' },
+        gold: { primary: '#ffdd00', secondary: '#ff8c00', glow: 'rgba(255,221,0,', face: 'rgba(255,200,50,' },
+        white: { primary: '#ffffff', secondary: '#888888', glow: 'rgba(255,255,255,', face: 'rgba(200,200,200,' }
+    };
+
+    const stars = [];
+    for (let i = 0; i < 500; i++) {
+        stars.push({
+            x: Math.random() * 2 - 1,
+            y: Math.random() * 2 - 1,
+            z: Math.random() * 2,
+            size: Math.random() * 2 + 0.5,
+            brightness: Math.random()
+        });
+    }
+
+    const particleSystem = [];
+    const trailBuffer = [];
+    const maxTrailFrames = 8;
+
+    function resize() {
+        canvas.width = window.innerWidth * window.devicePixelRatio;
+        canvas.height = window.innerHeight * window.devicePixelRatio;
+        ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    function getCurrentMesh() {
+        let mesh = Shapes[state.shape]();
+
+        if (state.animation === 'morph' && state.morphFrom && state.morphTo) {
+            const fromMesh = Shapes[state.morphFrom]();
+            const toMesh = Shapes[state.morphTo]();
+            const maxVerts = Math.max(fromMesh.vertices.length, toMesh.vertices.length);
+
+            mesh.vertices = [];
+            for (let i = 0; i < maxVerts; i++) {
+                const fromV = fromMesh.vertices[i % fromMesh.vertices.length];
+                const toV = toMesh.vertices[i % toMesh.vertices.length];
+                mesh.vertices.push(Vec3.lerp(fromV, toV, state.morphProgress));
             }
         }
 
-        function drawSolid(projected, rotated, sortedFaces) {
-            for (let face of sortedFaces) {
-                const normal = getFaceNormal(rotated, face.verts);
-                if (normal.z < 0) continue;
+        return mesh;
+    }
 
-                const brightness = Math.max(0.3, normal.z / 200);
+    function project(point, width, height) {
+        const fov = state.fov * Math.PI / 180;
+        const aspect = width / height;
+        const scale = state.scale / 100;
+
+        const z = point.z + state.camDist;
+        const factor = (1 / Math.tan(fov / 2)) / z * Math.min(width, height) * 0.3 * scale;
+
+        return {
+            x: width / 2 + point.x * factor,
+            y: height / 2 - point.y * factor,
+            z: z,
+            factor: factor
+        };
+    }
+
+    function transformMesh(mesh, rx, ry, rz, scale = 1, offset = { x: 0, y: 0, z: 0 }) {
+        let matrix = Mat4.identity();
+        matrix = Mat4.multiply(Mat4.rotateX(rx), matrix);
+        matrix = Mat4.multiply(Mat4.rotateY(ry), matrix);
+        matrix = Mat4.multiply(Mat4.rotateZ(rz), matrix);
+        matrix = Mat4.multiply(Mat4.scale(scale, scale, scale), matrix);
+
+        return mesh.vertices.map(v => {
+            const transformed = Mat4.transformPoint(matrix, v);
+            return Vec3.add(transformed, offset);
+        });
+    }
+
+    function getFaceNormal(vertices, face) {
+        const v0 = vertices[face[0]];
+        const v1 = vertices[face[1]];
+        const v2 = vertices[face[2]];
+        const edge1 = Vec3.sub(v1, v0);
+        const edge2 = Vec3.sub(v2, v0);
+        return Vec3.normalize(Vec3.cross(edge1, edge2));
+    }
+
+    function getFaceCenter(vertices, face) {
+        const center = Vec3.create();
+        face.forEach(i => {
+            center.x += vertices[i].x;
+            center.y += vertices[i].y;
+            center.z += vertices[i].z;
+        });
+        return Vec3.mul(center, 1 / face.length);
+    }
+
+    function drawStars(width, height, time) {
+        stars.forEach(star => {
+            const z = ((star.z + time * 0.0001) % 2);
+            const factor = 1 / (z + 0.5);
+            const x = width / 2 + star.x * width * factor * 0.5;
+            const y = height / 2 + star.y * height * factor * 0.5;
+
+            if (x > 0 && x < width && y > 0 && y < height) {
+                const brightness = star.brightness * (1 - z / 2) * (0.5 + 0.5 * Math.sin(time * 0.003 + star.x * 10));
+                const size = star.size * factor;
 
                 ctx.beginPath();
-                ctx.moveTo(projected[face.verts[0]].x, projected[face.verts[0]].y);
-                for (let i = 1; i < face.verts.length; i++) {
-                    ctx.lineTo(projected[face.verts[i]].x, projected[face.verts[i]].y);
-                }
-                ctx.closePath();
-
-                ctx.fillStyle = face.color;
-                ctx.globalAlpha = brightness;
+                ctx.arc(x, y, size, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255,255,255,${brightness})`;
                 ctx.fill();
-                ctx.globalAlpha = 1;
-
-                ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 2;
-                ctx.stroke();
             }
+        });
+    }
+
+    function drawGrid(width, height, time) {
+        const horizon = height * 0.6;
+        const gridColor = colors[state.color];
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, horizon, width, height - horizon);
+        ctx.clip();
+
+        const gridSize = 40;
+        const offset = (time * 0.05) % gridSize;
+
+        for (let i = -20; i < 40; i++) {
+            const y = horizon + (i * gridSize + offset);
+            const perspective = (y - horizon) / (height - horizon);
+            const alpha = Math.pow(1 - perspective, 2) * 0.3;
+
+            ctx.strokeStyle = gridColor.glow + alpha + ')';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(width, y);
+            ctx.stroke();
         }
 
-        function drawGradient(projected, rotated, sortedFaces) {
-            for (let face of sortedFaces) {
-                const normal = getFaceNormal(rotated, face.verts);
-                if (normal.z < 0) continue;
+        for (let i = -30; i < 30; i++) {
+            const baseX = width / 2 + i * gridSize;
+            ctx.strokeStyle = gridColor.glow + '0.2)';
+            ctx.beginPath();
+            ctx.moveTo(baseX, horizon);
+            ctx.lineTo(baseX + (i * 2), height);
+            ctx.stroke();
+        }
 
-                const p0 = projected[face.verts[0]];
-                const p2 = projected[face.verts[2]];
+        ctx.restore();
+    }
 
-                const gradient = ctx.createLinearGradient(p0.x, p0.y, p2.x, p2.y);
-                gradient.addColorStop(0, face.color);
-                gradient.addColorStop(1, '#000');
+    function renderShape(mesh, transformedVerts, width, height, time, options = {}) {
+        const { alpha = 1, isReflection = false, isSatellite = false } = options;
+        const pal = colors[state.color];
+        const mode = state.renderMode;
 
+        const projected = transformedVerts.map(v => project(v, width, height));
+
+        const sortedFaces = mesh.faces.map((face, i) => {
+            const center = getFaceCenter(transformedVerts, face);
+            return { face, index: i, depth: center.z };
+        }).sort((a, b) => b.depth - a.depth);
+
+        const lightDir = Vec3.normalize(Vec3.create(0.5, 1, 0.8));
+
+        sortedFaces.forEach(({ face }) => {
+            const normal = getFaceNormal(transformedVerts, face);
+            const center = getFaceCenter(transformedVerts, face);
+
+            if (mode !== 'wireframe' && mode !== 'hologram' && mode !== 'xray' && mode !== 'neon') {
+                const viewDir = Vec3.normalize(Vec3.sub(Vec3.create(0, 0, state.camDist), center));
+                if (Vec3.dot(normal, viewDir) < 0) return;
+            }
+
+            const diffuse = Math.max(0, Vec3.dot(normal, lightDir));
+            const ambient = 0.3;
+            const light = ambient + diffuse * 0.7;
+
+            const points = face.map(i => projected[i]);
+            const avgZ = points.reduce((sum, p) => sum + p.z, 0) / points.length;
+
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                ctx.lineTo(points[i].x, points[i].y);
+            }
+            ctx.closePath();
+
+            const baseAlpha = alpha * (isReflection ? 0.3 : 1);
+
+            switch (mode) {
+                case 'wireframe':
+                    ctx.strokeStyle = pal.primary;
+                    ctx.lineWidth = 2;
+                    ctx.globalAlpha = baseAlpha;
+                    ctx.stroke();
+                    break;
+
+                case 'solid':
+                    const solidLight = Math.floor(light * 255);
+                    ctx.fillStyle = `rgb(${solidLight * 0.4}, ${solidLight * 0.7}, ${solidLight})`;
+                    ctx.globalAlpha = baseAlpha * 0.9;
+                    ctx.fill();
+                    ctx.strokeStyle = pal.primary;
+                    ctx.lineWidth = 1;
+                    ctx.globalAlpha = baseAlpha * 0.5;
+                    ctx.stroke();
+                    break;
+
+                case 'glass':
+                    const glassGrad = ctx.createLinearGradient(
+                        points[0].x, points[0].y,
+                        points[2 % points.length].x, points[2 % points.length].y
+                    );
+                    glassGrad.addColorStop(0, pal.glow + (0.1 * light) + ')');
+                    glassGrad.addColorStop(0.5, pal.glow + (0.2 * light) + ')');
+                    glassGrad.addColorStop(1, pal.glow + (0.05 * light) + ')');
+                    ctx.fillStyle = glassGrad;
+                    ctx.globalAlpha = baseAlpha;
+                    ctx.fill();
+                    ctx.strokeStyle = pal.glow + '0.6)';
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                    break;
+
+                case 'chrome':
+                    const chromeGrad = ctx.createRadialGradient(
+                        points[0].x, points[0].y, 0,
+                        points[0].x, points[0].y, 100
+                    );
+                    const chromeBright = Math.floor(light * 255);
+                    chromeGrad.addColorStop(0, `rgb(${chromeBright},${chromeBright},${chromeBright})`);
+                    chromeGrad.addColorStop(0.5, `rgb(${chromeBright * 0.5},${chromeBright * 0.6},${chromeBright * 0.7})`);
+                    chromeGrad.addColorStop(1, `rgb(${chromeBright * 0.2},${chromeBright * 0.3},${chromeBright * 0.4})`);
+                    ctx.fillStyle = chromeGrad;
+                    ctx.globalAlpha = baseAlpha * 0.9;
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                    break;
+
+                case 'hologram':
+                    const scanline = (Math.sin(points[0].y * 0.1 + time * 0.01) + 1) * 0.5;
+                    const flicker = 0.8 + Math.sin(time * 0.05) * 0.2;
+                    ctx.fillStyle = pal.glow + (0.08 * light * scanline * flicker) + ')';
+                    ctx.globalAlpha = baseAlpha;
+                    ctx.fill();
+                    ctx.strokeStyle = pal.primary;
+                    ctx.lineWidth = 1 + scanline;
+                    ctx.globalAlpha = baseAlpha * (0.5 + scanline * 0.5) * flicker;
+                    ctx.stroke();
+
+                    if (!isSatellite) {
+                        ctx.save();
+                        ctx.clip();
+                        for (let y = 0; y < height; y += 4) {
+                            if (Math.sin(y * 0.5 + time * 0.02) > 0) {
+                                ctx.fillStyle = pal.glow + '0.03)';
+                                ctx.fillRect(0, y, width, 2);
+                            }
+                        }
+                        ctx.restore();
+                    }
+                    break;
+
+                case 'neon':
+                    ctx.shadowColor = pal.primary;
+                    ctx.shadowBlur = 20;
+                    ctx.strokeStyle = pal.primary;
+                    ctx.lineWidth = 3;
+                    ctx.globalAlpha = baseAlpha;
+                    ctx.stroke();
+                    ctx.shadowBlur = 10;
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                    break;
+
+                case 'gradient':
+                    const gradAngle = Math.atan2(
+                        points[2 % points.length].y - points[0].y,
+                        points[2 % points.length].x - points[0].x
+                    );
+                    const gradLen = 100;
+                    const grad = ctx.createLinearGradient(
+                        points[0].x, points[0].y,
+                        points[0].x + Math.cos(gradAngle) * gradLen,
+                        points[0].y + Math.sin(gradAngle) * gradLen
+                    );
+                    grad.addColorStop(0, pal.primary);
+                    grad.addColorStop(1, pal.secondary);
+                    ctx.fillStyle = grad;
+                    ctx.globalAlpha = baseAlpha * light;
+                    ctx.fill();
+                    ctx.strokeStyle = pal.primary;
+                    ctx.lineWidth = 1;
+                    ctx.globalAlpha = baseAlpha * 0.5;
+                    ctx.stroke();
+                    break;
+
+                case 'xray':
+                    const depth = 1 - (avgZ / (state.camDist + 3));
+                    ctx.strokeStyle = pal.glow + (depth * 0.8) + ')';
+                    ctx.lineWidth = depth * 2 + 0.5;
+                    ctx.globalAlpha = baseAlpha;
+                    ctx.stroke();
+                    break;
+            }
+        });
+
+        ctx.globalAlpha = 1;
+
+        if (mode === 'wireframe' || mode === 'hologram' || mode === 'neon') {
+            projected.forEach(p => {
                 ctx.beginPath();
-                ctx.moveTo(p0.x, p0.y);
-                for (let i = 1; i < face.verts.length; i++) {
-                    ctx.lineTo(projected[face.verts[i]].x, projected[face.verts[i]].y);
-                }
-                ctx.closePath();
-
-                ctx.fillStyle = gradient;
+                ctx.arc(p.x, p.y, mode === 'neon' ? 4 : 3, 0, Math.PI * 2);
+                ctx.fillStyle = mode === 'neon' ? '#fff' : pal.primary;
+                ctx.globalAlpha = alpha;
                 ctx.fill();
-                ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-                ctx.lineWidth = 1;
-                ctx.stroke();
-            }
+            });
+            ctx.globalAlpha = 1;
         }
 
-        function drawRainbow(projected, rotated, sortedFaces, time) {
-            for (let face of sortedFaces) {
-                const normal = getFaceNormal(rotated, face.verts);
-                if (normal.z < 0) continue;
+        return { projected, mesh };
+    }
 
-                const hue = (time * 100 + face.avgZ + face.index * 60) % 360;
-                const brightness = Math.max(40, 70 + normal.z / 5);
+    function drawBloom(width, height) {
+        if (!state.bloom) return;
 
-                ctx.beginPath();
-                ctx.moveTo(projected[face.verts[0]].x, projected[face.verts[0]].y);
-                for (let i = 1; i < face.verts.length; i++) {
-                    ctx.lineTo(projected[face.verts[i]].x, projected[face.verts[i]].y);
-                }
-                ctx.closePath();
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        ctx.filter = 'blur(20px)';
+        ctx.globalAlpha = 0.3;
+        ctx.drawImage(canvas, 0, 0, width, height);
+        ctx.filter = 'blur(40px)';
+        ctx.globalAlpha = 0.2;
+        ctx.drawImage(canvas, 0, 0, width, height);
+        ctx.restore();
+    }
 
-                ctx.fillStyle = `hsl(${hue}, 100%, ${brightness}%)`;
-                ctx.fill();
-                ctx.strokeStyle = `hsl(${hue}, 100%, 90%)`;
-                ctx.lineWidth = 2;
-                ctx.stroke();
-            }
-        }
+    function drawShadow(projected, width, height) {
+        if (!state.shadow || projected.length === 0) return;
 
-        function draw(time) {
-            time = time / 1000;
+        const shadowY = height * 0.7;
+        const pal = colors[state.color];
 
-            // Clear with fade effect
-            ctx.fillStyle = 'rgba(15, 15, 35, 0.3)';
-            ctx.fillRect(0, 0, W, H);
+        ctx.save();
+        ctx.globalAlpha = 0.15;
+        ctx.fillStyle = pal.glow + '0.5)';
 
-            // Update rotation
-            if (autoRotate) {
-                angleX += velocityX;
-                angleY += velocityY;
-                angleZ += velocityZ;
+        ctx.beginPath();
+        let first = true;
+        projected.forEach(p => {
+            const shadowX = p.x;
+            const shadowScale = 0.5;
+            const sx = width / 2 + (shadowX - width / 2) * shadowScale;
+
+            if (first) {
+                ctx.moveTo(sx, shadowY);
+                first = false;
             } else {
-                // Smooth interpolation to target
-                angleX += (targetAngleX - angleX) * 0.1;
-                angleY += (targetAngleY - angleY) * 0.1;
+                ctx.lineTo(sx, shadowY);
             }
+        });
+        ctx.closePath();
+        ctx.filter = 'blur(15px)';
+        ctx.fill();
+        ctx.restore();
+    }
 
-            // Draw all cubes
-            for (let cube of cubes) {
-                drawCube(cube, time);
-            }
-
-            requestAnimationFrame(draw);
+    function updateParticles(transformedVerts, time) {
+        if (!state.particles) {
+            particleSystem.length = 0;
+            return;
         }
 
-        // Controls
-        function toggleAuto() {
-            autoRotate = !autoRotate;
-        }
-
-        function changeStyle() {
-            styleIndex = (styleIndex + 1) % styles.length;
-        }
-
-        function resetView() {
-            angleX = angleY = angleZ = 0;
-            targetAngleX = targetAngleY = 0;
-            zoom = 1;
-            cubes = [{ x: 0, y: 0, z: 0, size: 150, phase: 0 }];
-        }
-
-        function addCube() {
-            const offset = 200 * cubes.length;
-            cubes.push({
-                x: (Math.random() - 0.5) * 300,
-                y: (Math.random() - 0.5) * 300,
-                z: (Math.random() - 0.5) * 200,
-                size: 80 + Math.random() * 70,
-                phase: Math.random() * Math.PI * 2
+        if (Math.random() < 0.3 && transformedVerts.length > 0) {
+            const v = transformedVerts[Math.floor(Math.random() * transformedVerts.length)];
+            particleSystem.push({
+                x: v.x, y: v.y, z: v.z,
+                vx: (Math.random() - 0.5) * 0.02,
+                vy: (Math.random() - 0.5) * 0.02,
+                vz: (Math.random() - 0.5) * 0.02,
+                life: 1,
+                size: Math.random() * 3 + 1
             });
         }
 
-        // Mouse/touch interaction
-        let isDragging = false;
-        let lastX, lastY;
+        for (let i = particleSystem.length - 1; i >= 0; i--) {
+            const p = particleSystem[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.z += p.vz;
+            p.life -= 0.01;
 
-        canvas.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            lastX = e.clientX;
-            lastY = e.clientY;
-            autoRotate = false;
+            if (p.life <= 0) {
+                particleSystem.splice(i, 1);
+            }
+        }
+    }
+
+    function drawParticles(width, height) {
+        const pal = colors[state.color];
+
+        particleSystem.forEach(p => {
+            const proj = project(p, width, height);
+            const alpha = p.life * 0.8;
+            const size = p.size * (proj.factor / 100);
+
+            ctx.beginPath();
+            ctx.arc(proj.x, proj.y, size, 0, Math.PI * 2);
+            ctx.fillStyle = pal.glow + alpha + ')';
+            ctx.fill();
         });
+    }
 
-        canvas.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-            const dx = e.clientX - lastX;
-            const dy = e.clientY - lastY;
-            targetAngleY += dx * 0.01;
-            targetAngleX += dy * 0.01;
-            lastX = e.clientX;
-            lastY = e.clientY;
+    let lastTime = performance.now();
+    let frameCount = 0;
+    let fps = 60;
+
+    function render(time) {
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        if (state.trail) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, width, height);
+        } else {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, width, height);
+        }
+
+        if (state.stars) drawStars(width, height, time);
+        if (state.grid) drawGrid(width, height, time);
+
+        const mesh = getCurrentMesh();
+
+        const speedFactor = state.speed / 50;
+
+        switch (state.animation) {
+            case 'rotate':
+                state.rotY += 0.01 * speedFactor;
+                state.rotX = state.targetRotX + Math.sin(time * 0.001) * 0.1;
+                break;
+            case 'bounce':
+                state.rotY += 0.01 * speedFactor;
+                state.rotX = state.targetRotX + Math.sin(time * 0.003) * 0.3;
+                break;
+            case 'pulse':
+                state.rotY += 0.005 * speedFactor;
+                const pulseScale = 1 + Math.sin(time * 0.005) * 0.2;
+                state.scale = 100 * pulseScale;
+                break;
+            case 'orbit':
+                state.rotY += 0.015 * speedFactor;
+                state.rotX = Math.sin(time * 0.001) * 0.5;
+                state.rotZ = Math.cos(time * 0.0015) * 0.3;
+                break;
+            case 'morph':
+                state.rotY += 0.01 * speedFactor;
+                state.morphProgress += 0.005;
+                if (state.morphProgress >= 1) {
+                    state.morphProgress = 0;
+                    const shapes = ['cube', 'tetrahedron', 'octahedron', 'icosahedron', 'dodecahedron'];
+                    state.morphFrom = state.morphTo || 'cube';
+                    do {
+                        state.morphTo = shapes[Math.floor(Math.random() * shapes.length)];
+                    } while (state.morphTo === state.morphFrom);
+                }
+                break;
+            case 'explode':
+                state.rotY += 0.01 * speedFactor;
+                const explodeFactor = (Math.sin(time * 0.002) + 1) * 0.5;
+                state.scale = 100 * (1 + explodeFactor * 0.5);
+                break;
+        }
+
+        if (!state.isDragging) {
+            state.rotX += (state.targetRotX - state.rotX) * 0.1;
+            state.rotY += (state.targetRotY - state.rotY) * 0.1;
+        }
+
+        const transformedVerts = transformMesh(mesh, state.rotX, state.rotY, state.rotZ);
+
+        if (state.reflect) {
+            const reflectedVerts = transformedVerts.map(v => Vec3.create(v.x, -v.y - 3, v.z));
+            ctx.save();
+            ctx.globalAlpha = 0.3;
+            renderShape(mesh, reflectedVerts, width, height, time, { alpha: 0.3, isReflection: true });
+            ctx.restore();
+        }
+
+        const mainRender = renderShape(mesh, transformedVerts, width, height, time);
+        drawShadow(mainRender.projected, width, height);
+
+        if (state.nested) {
+            const nestedMesh = Shapes.cube();
+            for (let i = 1; i <= 3; i++) {
+                const scale = 0.5 + i * 0.3;
+                const nestedVerts = transformMesh(nestedMesh,
+                    state.rotX + i * 0.2,
+                    state.rotY * (1 + i * 0.3),
+                    state.rotZ + i * 0.1,
+                    scale
+                );
+                ctx.globalAlpha = 0.4 / i;
+                renderShape(nestedMesh, nestedVerts, width, height, time, { alpha: 0.4 / i });
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        if (state.satellites) {
+            const satMesh = Shapes.octahedron();
+            for (let i = 0; i < 4; i++) {
+                const angle = time * 0.002 + (i * Math.PI / 2);
+                const radius = 2.5;
+                const offset = {
+                    x: Math.cos(angle) * radius,
+                    y: Math.sin(time * 0.003 + i) * 0.5,
+                    z: Math.sin(angle) * radius
+                };
+                const satVerts = transformMesh(satMesh,
+                    time * 0.003,
+                    time * 0.004,
+                    0,
+                    0.2,
+                    offset
+                );
+                renderShape(satMesh, satVerts, width, height, time, { isSatellite: true });
+            }
+        }
+
+        updateParticles(transformedVerts, time);
+        drawParticles(width, height);
+
+        drawBloom(width, height);
+
+        frameCount++;
+        if (time - lastTime >= 1000) {
+            fps = frameCount;
+            frameCount = 0;
+            lastTime = time;
+            document.getElementById('fpsDisplay').textContent = fps;
+            document.getElementById('faceDisplay').textContent = mesh.faces.length;
+            document.getElementById('vertDisplay').textContent = mesh.vertices.length;
+        }
+
+        requestAnimationFrame(render);
+    }
+
+    // ==================== EVENT HANDLERS ====================
+
+    canvas.addEventListener('mousedown', (e) => {
+        state.isDragging = true;
+        state.dragStart = { x: e.clientX, y: e.clientY };
+        state.lastMouse = { x: e.clientX, y: e.clientY };
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        if (state.isDragging) {
+            const dx = e.clientX - state.lastMouse.x;
+            const dy = e.clientY - state.lastMouse.y;
+            state.rotY += dx * 0.005;
+            state.rotX += dy * 0.005;
+            state.targetRotX = state.rotX;
+            state.targetRotY = state.rotY;
+            state.lastMouse = { x: e.clientX, y: e.clientY };
+        }
+    });
+
+    canvas.addEventListener('mouseup', () => {
+        state.isDragging = false;
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+        state.isDragging = false;
+    });
+
+    canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        state.camDist = Math.max(3, Math.min(15, state.camDist + e.deltaY * 0.01));
+    });
+
+    canvas.addEventListener('dblclick', () => {
+        state.rotX = 0.3;
+        state.rotY = 0;
+        state.rotZ = 0;
+        state.targetRotX = 0.3;
+        state.targetRotY = 0;
+        state.camDist = 6;
+        state.scale = 100;
+    });
+
+    canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+            state.isDragging = true;
+            state.lastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }
+    });
+
+    canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (e.touches.length === 1 && state.isDragging) {
+            const dx = e.touches[0].clientX - state.lastMouse.x;
+            const dy = e.touches[0].clientY - state.lastMouse.y;
+            state.rotY += dx * 0.005;
+            state.rotX += dy * 0.005;
+            state.targetRotX = state.rotX;
+            state.targetRotY = state.rotY;
+            state.lastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        } else if (e.touches.length === 2) {
+            const dist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            if (state.lastPinchDist) {
+                const delta = state.lastPinchDist - dist;
+                state.camDist = Math.max(3, Math.min(15, state.camDist + delta * 0.02));
+            }
+            state.lastPinchDist = dist;
+        }
+    });
+
+    canvas.addEventListener('touchend', () => {
+        state.isDragging = false;
+        state.lastPinchDist = null;
+    });
+
+    document.getElementById('shapeSelect').addEventListener('change', (e) => {
+        state.shape = e.target.value;
+        state.morphFrom = null;
+        state.morphTo = null;
+        state.morphProgress = 0;
+    });
+
+    document.getElementById('renderSelect').addEventListener('change', (e) => {
+        state.renderMode = e.target.value;
+    });
+
+    document.getElementById('animSelect').addEventListener('change', (e) => {
+        state.animation = e.target.value;
+        if (e.target.value === 'morph') {
+            state.morphFrom = state.shape;
+            state.morphTo = 'octahedron';
+            state.morphProgress = 0;
+        }
+    });
+
+    document.getElementById('speedSlider').addEventListener('input', (e) => {
+        state.speed = parseInt(e.target.value);
+    });
+
+    document.getElementById('scaleSlider').addEventListener('input', (e) => {
+        state.scale = parseInt(e.target.value);
+    });
+
+    document.getElementById('fovSlider').addEventListener('input', (e) => {
+        state.fov = parseInt(e.target.value);
+    });
+
+    document.querySelectorAll('.color-swatch').forEach(swatch => {
+        swatch.addEventListener('click', () => {
+            document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+            swatch.classList.add('active');
+            state.color = swatch.dataset.color;
         });
+    });
 
-        canvas.addEventListener('mouseup', () => isDragging = false);
-        canvas.addEventListener('mouseleave', () => isDragging = false);
-
-        canvas.addEventListener('wheel', (e) => {
-            e.preventDefault();
-            zoom = Math.max(0.5, Math.min(3, zoom - e.deltaY * 0.001));
+    const toggleBtn = (id, prop) => {
+        const btn = document.getElementById(id);
+        btn.addEventListener('click', () => {
+            state[prop] = !state[prop];
+            btn.classList.toggle('active', state[prop]);
         });
+    };
 
-        requestAnimationFrame(draw);
+    toggleBtn('bloomBtn', 'bloom');
+    toggleBtn('starsBtn', 'stars');
+    toggleBtn('gridBtn', 'grid');
+    toggleBtn('reflectBtn', 'reflect');
+    toggleBtn('shadowBtn', 'shadow');
+    toggleBtn('trailBtn', 'trail');
+    toggleBtn('satellitesBtn', 'satellites');
+    toggleBtn('nestedBtn', 'nested');
+    toggleBtn('particlesBtn', 'particles');
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+        state.rotX = 0.3;
+        state.rotY = 0;
+        state.rotZ = 0;
+        state.targetRotX = 0.3;
+        state.targetRotY = 0;
+        state.camDist = 6;
+        state.scale = 100;
+    });
+
+    document.getElementById('screenshotBtn').addEventListener('click', () => {
+        const link = document.createElement('a');
+        link.download = '3d-canvas-screenshot.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    });
+
+    requestAnimationFrame(render);
     </script>
 </body>
 </html>

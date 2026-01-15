@@ -2,354 +2,1290 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Bouncing Ball in Rotating Polyhedron</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            overflow: hidden;
+            background: #000;
             font-family: 'Segoe UI', system-ui, sans-serif;
-            color: #fff;
+            touch-action: none;
         }
-        h1 {
-            margin-bottom: 20px;
-            font-size: 1.5rem;
-            text-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
-        }
+
         canvas {
-            border-radius: 10px;
-            box-shadow: 0 0 40px rgba(0, 255, 255, 0.3);
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
         }
-        .controls {
-            margin-top: 20px;
+
+        #ui {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .panel {
+            pointer-events: auto;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 16px;
+            color: #fff;
+            font-size: 13px;
+        }
+
+        #stats-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            min-width: 200px;
+        }
+
+        #controls-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            min-width: 220px;
+        }
+
+        .stat-row {
             display: flex;
-            gap: 15px;
+            justify-content: space-between;
+            margin: 8px 0;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
-        button {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            background: linear-gradient(135deg, #00d4ff, #0099cc);
+
+        .stat-label {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .stat-value {
+            font-weight: 600;
+            font-family: 'Monaco', 'Consolas', monospace;
+        }
+
+        h3 {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 12px;
+            color: rgba(255, 255, 255, 0.8);
+            border-bottom: 2px solid currentColor;
+            padding-bottom: 8px;
+        }
+
+        .control-group {
+            margin: 12px 0;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 6px;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        select, input[type="range"] {
+            width: 100%;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
             color: #fff;
             cursor: pointer;
-            font-size: 1rem;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: all 0.3s;
         }
+
+        select:hover, input[type="range"]:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        select option {
+            background: #1a1a2e;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            height: 6px;
+            padding: 0;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            margin-top: 8px;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: #fff;
+            cursor: pointer;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.3s;
+        }
+
         button:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.1));
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(255, 255, 255, 0.1);
         }
-        .info {
-            margin-top: 15px;
-            font-size: 0.9rem;
-            opacity: 0.7;
+
+        #impact-flash {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.05s;
+            z-index: 5;
+        }
+
+        #sound-bars {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 3px;
+            height: 60px;
+            align-items: flex-end;
+        }
+
+        .sound-bar {
+            width: 4px;
+            background: linear-gradient(to top, var(--accent-color, #0ff), transparent);
+            border-radius: 2px;
+            transition: height 0.1s ease-out;
+        }
+
+        #energy-ring {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            border: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .theme-selector {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .theme-btn {
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            cursor: pointer;
+            transition: all 0.3s;
+            padding: 0;
+            margin: 0;
+        }
+
+        .theme-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 15px currentColor;
+        }
+
+        .theme-btn.active {
+            border-color: #fff;
+            box-shadow: 0 0 20px currentColor;
+        }
+
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.4);
+            text-align: right;
+            line-height: 1.6;
+        }
+
+        @media (max-width: 768px) {
+            .panel {
+                font-size: 11px;
+                padding: 12px;
+            }
+            #stats-panel {
+                top: 10px;
+                left: 10px;
+                min-width: 150px;
+            }
+            #controls-panel {
+                top: auto;
+                bottom: 10px;
+                right: 10px;
+                left: 10px;
+                min-width: auto;
+            }
+            #instructions {
+                display: none;
+            }
         }
     </style>
 </head>
 <body>
-    <h1>Bouncing Ball in Rotating Icosahedron</h1>
-    <canvas id="canvas" width="700" height="700"></canvas>
-    <div class="controls">
-        <button onclick="toggleRotation()">Toggle Rotation</button>
-        <button onclick="resetBall()">Reset Ball</button>
-        <button onclick="changePolyhedron()">Change Shape</button>
+    <canvas id="canvas"></canvas>
+
+    <div id="impact-flash"></div>
+
+    <div id="ui">
+        <div id="stats-panel" class="panel">
+            <h3>Statistics</h3>
+            <div class="stat-row">
+                <span class="stat-label">Velocity</span>
+                <span class="stat-value" id="velocity">0.00</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Collisions</span>
+                <span class="stat-value" id="collisions">0</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Energy</span>
+                <span class="stat-value" id="energy">0.00</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Spin Rate</span>
+                <span class="stat-value" id="spin">0.00</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">FPS</span>
+                <span class="stat-value" id="fps">60</span>
+            </div>
+        </div>
+
+        <div id="controls-panel" class="panel">
+            <h3>Controls</h3>
+
+            <div class="control-group">
+                <label>Polyhedron</label>
+                <select id="polyhedron-select">
+                    <option value="icosahedron">Icosahedron (20 faces)</option>
+                    <option value="dodecahedron">Dodecahedron (12 faces)</option>
+                    <option value="octahedron">Octahedron (8 faces)</option>
+                    <option value="tetrahedron">Tetrahedron (4 faces)</option>
+                    <option value="cube">Cube (6 faces)</option>
+                    <option value="stellated">Stellated Octahedron</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Ball Count: <span id="ball-count-value">3</span></label>
+                <input type="range" id="ball-count" min="1" max="10" value="3">
+            </div>
+
+            <div class="control-group">
+                <label>Rotation Speed: <span id="rotation-value">50</span>%</label>
+                <input type="range" id="rotation-speed" min="0" max="100" value="50">
+            </div>
+
+            <div class="control-group">
+                <label>Gravity: <span id="gravity-value">50</span>%</label>
+                <input type="range" id="gravity" min="0" max="100" value="50">
+            </div>
+
+            <div class="control-group">
+                <label>Trail Length: <span id="trail-value">50</span>%</label>
+                <input type="range" id="trail-length" min="0" max="100" value="50">
+            </div>
+
+            <div class="control-group">
+                <label>Color Theme</label>
+                <div class="theme-selector">
+                    <button class="theme-btn active" data-theme="cyberpunk" style="background: linear-gradient(135deg, #0ff, #f0f)"></button>
+                    <button class="theme-btn" data-theme="sunset" style="background: linear-gradient(135deg, #ff6b35, #f7c59f)"></button>
+                    <button class="theme-btn" data-theme="ocean" style="background: linear-gradient(135deg, #0077b6, #00b4d8)"></button>
+                    <button class="theme-btn" data-theme="aurora" style="background: linear-gradient(135deg, #2ecc71, #9b59b6)"></button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Camera Mode</label>
+                <select id="camera-mode">
+                    <option value="orbit">Orbit</option>
+                    <option value="follow">Follow Ball</option>
+                    <option value="fixed">Fixed</option>
+                    <option value="dynamic">Dynamic</option>
+                </select>
+            </div>
+
+            <button id="reset-btn">Reset Simulation</button>
+            <button id="add-ball-btn">Add Ball</button>
+        </div>
+
+        <div id="sound-bars"></div>
+
+        <div id="instructions">
+            Drag to orbit<br>
+            Scroll to zoom<br>
+            Click ball to push
+        </div>
     </div>
-    <div class="info">Physics simulation with real-time collision detection</div>
 
     <script>
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        const W = canvas.width, H = canvas.height;
-        const cx = W / 2, cy = H / 2;
-
-        let rotating = true;
-        let polyType = 0;
-        const polyTypes = ['icosahedron', 'dodecahedron', 'octahedron'];
-
-        // Ball state
-        let ball = {
-            x: 0, y: 0, z: 0,
-            vx: 2, vy: 1.5, vz: 1,
-            radius: 15,
-            trail: [],
-            color: { h: 0, s: 100, l: 60 }
+        // ==================== CONFIGURATION ====================
+        const CONFIG = {
+            themes: {
+                cyberpunk: {
+                    bg: ['#0a0a1a', '#1a0a2e', '#0a1a2e'],
+                    primary: '#00ffff',
+                    secondary: '#ff00ff',
+                    accent: '#ffff00',
+                    glow: 'rgba(0, 255, 255, 0.5)'
+                },
+                sunset: {
+                    bg: ['#1a0a0a', '#2e1a0a', '#1a0a1a'],
+                    primary: '#ff6b35',
+                    secondary: '#f7c59f',
+                    accent: '#ff4444',
+                    glow: 'rgba(255, 107, 53, 0.5)'
+                },
+                ocean: {
+                    bg: ['#0a1a2e', '#0a2e3e', '#1a2e3e'],
+                    primary: '#00b4d8',
+                    secondary: '#0077b6',
+                    accent: '#90e0ef',
+                    glow: 'rgba(0, 180, 216, 0.5)'
+                },
+                aurora: {
+                    bg: ['#0a1a0a', '#1a0a2e', '#0a2e1a'],
+                    primary: '#2ecc71',
+                    secondary: '#9b59b6',
+                    accent: '#3498db',
+                    glow: 'rgba(46, 204, 113, 0.5)'
+                }
+            }
         };
 
-        // Rotation angles
-        let angleX = 0, angleY = 0, angleZ = 0;
-        const rotSpeed = 0.008;
-
-        // Generate polyhedron vertices
-        function generatePolyhedron(type) {
-            const phi = (1 + Math.sqrt(5)) / 2;
-            const scale = 200;
-            let vertices = [];
-
-            if (type === 'icosahedron') {
-                const a = 1, b = phi;
-                vertices = [
-                    [0, a, b], [0, a, -b], [0, -a, b], [0, -a, -b],
-                    [a, b, 0], [a, -b, 0], [-a, b, 0], [-a, -b, 0],
-                    [b, 0, a], [b, 0, -a], [-b, 0, a], [-b, 0, -a]
-                ];
-            } else if (type === 'dodecahedron') {
-                const a = 1, b = phi, c = 1/phi;
-                vertices = [
-                    [1,1,1], [1,1,-1], [1,-1,1], [1,-1,-1],
-                    [-1,1,1], [-1,1,-1], [-1,-1,1], [-1,-1,-1],
-                    [0,c,b], [0,c,-b], [0,-c,b], [0,-c,-b],
-                    [c,b,0], [c,-b,0], [-c,b,0], [-c,-b,0],
-                    [b,0,c], [b,0,-c], [-b,0,c], [-b,0,-c]
-                ];
-            } else {
-                vertices = [
-                    [1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1]
-                ];
+        // ==================== MATH UTILITIES ====================
+        class Vec3 {
+            constructor(x = 0, y = 0, z = 0) {
+                this.x = x;
+                this.y = y;
+                this.z = z;
             }
 
-            return vertices.map(v => {
-                const len = Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
-                return [v[0]/len * scale, v[1]/len * scale, v[2]/len * scale];
-            });
-        }
-
-        let vertices = generatePolyhedron(polyTypes[polyType]);
-
-        // Get faces for current polyhedron
-        function getFaces(type) {
-            if (type === 'icosahedron') {
-                return [
-                    [0,2,8], [0,8,4], [0,4,6], [0,6,10], [0,10,2],
-                    [1,9,4], [1,4,6], [1,6,11], [1,11,3], [1,3,9],
-                    [2,10,7], [2,7,5], [2,5,8], [3,11,7], [3,7,5],
-                    [3,5,9], [4,8,9], [5,8,9], [6,10,11], [7,10,11]
-                ];
-            } else if (type === 'dodecahedron') {
-                return [
-                    [0,8,4,14,12], [0,12,16,2,10], [0,10,6,18,8],
-                    [1,9,5,15,13], [1,13,17,3,11], [1,11,7,19,9],
-                    [2,16,17,3,13], [4,8,18,19,9], [5,9,19,7,15],
-                    [6,14,15,7,18], [10,2,13,15,14], [11,3,12,14,6]
-                ];
+            clone() { return new Vec3(this.x, this.y, this.z); }
+            add(v) { return new Vec3(this.x + v.x, this.y + v.y, this.z + v.z); }
+            sub(v) { return new Vec3(this.x - v.x, this.y - v.y, this.z - v.z); }
+            mul(s) { return new Vec3(this.x * s, this.y * s, this.z * s); }
+            dot(v) { return this.x * v.x + this.y * v.y + this.z * v.z; }
+            cross(v) {
+                return new Vec3(
+                    this.y * v.z - this.z * v.y,
+                    this.z * v.x - this.x * v.z,
+                    this.x * v.y - this.y * v.x
+                );
             }
-            return [[0,2,4], [0,4,3], [0,3,5], [0,5,2], [1,2,5], [1,5,3], [1,3,4], [1,4,2]];
+            length() { return Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z); }
+            normalize() {
+                const len = this.length();
+                return len > 0 ? this.mul(1 / len) : new Vec3();
+            }
+            reflect(normal) {
+                const d = this.dot(normal) * 2;
+                return this.sub(normal.mul(d));
+            }
         }
 
-        let faces = getFaces(polyTypes[polyType]);
+        class Matrix4 {
+            constructor() {
+                this.m = new Float32Array(16);
+                this.identity();
+            }
 
-        // 3D rotation matrices
-        function rotatePoint(p, ax, ay, az) {
-            let [x, y, z] = p;
+            identity() {
+                this.m.fill(0);
+                this.m[0] = this.m[5] = this.m[10] = this.m[15] = 1;
+                return this;
+            }
 
-            // Rotate around X
-            let y1 = y * Math.cos(ax) - z * Math.sin(ax);
-            let z1 = y * Math.sin(ax) + z * Math.cos(ax);
-            y = y1; z = z1;
-
-            // Rotate around Y
-            let x1 = x * Math.cos(ay) + z * Math.sin(ay);
-            z1 = -x * Math.sin(ay) + z * Math.cos(ay);
-            x = x1; z = z1;
-
-            // Rotate around Z
-            x1 = x * Math.cos(az) - y * Math.sin(az);
-            y1 = x * Math.sin(az) + y * Math.cos(az);
-
-            return [x1, y1, z1];
-        }
-
-        // Project 3D to 2D
-        function project(p) {
-            const fov = 400;
-            const distance = 600;
-            const scale = fov / (distance - p[2]);
-            return [cx + p[0] * scale, cy + p[1] * scale, scale];
-        }
-
-        // Calculate face normal
-        function faceNormal(face, rotatedVerts) {
-            const v0 = rotatedVerts[face[0]];
-            const v1 = rotatedVerts[face[1]];
-            const v2 = rotatedVerts[face[2]];
-
-            const ax = v1[0] - v0[0], ay = v1[1] - v0[1], az = v1[2] - v0[2];
-            const bx = v2[0] - v0[0], by = v2[1] - v0[1], bz = v2[2] - v0[2];
-
-            return [ay*bz - az*by, az*bx - ax*bz, ax*by - ay*bx];
-        }
-
-        // Ball physics
-        function updateBall() {
-            const gravity = 0.05;
-            const damping = 0.98;
-            const bounce = 0.85;
-
-            ball.vy += gravity;
-            ball.vx *= damping;
-            ball.vy *= damping;
-            ball.vz *= damping;
-
-            ball.x += ball.vx;
-            ball.y += ball.vy;
-            ball.z += ball.vz;
-
-            // Collision with polyhedron faces
-            const rotatedVerts = vertices.map(v => rotatePoint(v, angleX, angleY, angleZ));
-
-            for (let face of faces) {
-                const normal = faceNormal(face, rotatedVerts);
-                const len = Math.sqrt(normal[0]**2 + normal[1]**2 + normal[2]**2);
-                const nx = normal[0]/len, ny = normal[1]/len, nz = normal[2]/len;
-
-                const v0 = rotatedVerts[face[0]];
-                const dist = (ball.x - v0[0])*nx + (ball.y - v0[1])*ny + (ball.z - v0[2])*nz;
-
-                if (dist < ball.radius && dist > -ball.radius * 2) {
-                    // Reflect velocity
-                    const dot = ball.vx*nx + ball.vy*ny + ball.vz*nz;
-                    ball.vx = (ball.vx - 2*dot*nx) * bounce;
-                    ball.vy = (ball.vy - 2*dot*ny) * bounce;
-                    ball.vz = (ball.vz - 2*dot*nz) * bounce;
-
-                    // Push ball out of face
-                    ball.x += nx * (ball.radius - dist);
-                    ball.y += ny * (ball.radius - dist);
-                    ball.z += nz * (ball.radius - dist);
-
-                    // Change color on collision
-                    ball.color.h = (ball.color.h + 30) % 360;
-
-                    // Add speed boost occasionally
-                    if (Math.random() < 0.3) {
-                        ball.vx += (Math.random() - 0.5) * 2;
-                        ball.vy += (Math.random() - 0.5) * 2;
-                        ball.vz += (Math.random() - 0.5) * 2;
+            multiply(b) {
+                const a = this.m, bm = b.m, r = new Matrix4();
+                for (let i = 0; i < 4; i++) {
+                    for (let j = 0; j < 4; j++) {
+                        r.m[i * 4 + j] =
+                            a[i * 4] * bm[j] +
+                            a[i * 4 + 1] * bm[4 + j] +
+                            a[i * 4 + 2] * bm[8 + j] +
+                            a[i * 4 + 3] * bm[12 + j];
                     }
                 }
+                return r;
             }
 
-            // Keep ball inside bounds
-            const maxDist = 180;
-            const ballDist = Math.sqrt(ball.x**2 + ball.y**2 + ball.z**2);
-            if (ballDist > maxDist) {
-                const scale = maxDist / ballDist;
-                ball.x *= scale;
-                ball.y *= scale;
-                ball.z *= scale;
+            rotateX(angle) {
+                const c = Math.cos(angle), s = Math.sin(angle);
+                const r = new Matrix4();
+                r.m[5] = c; r.m[6] = -s;
+                r.m[9] = s; r.m[10] = c;
+                return this.multiply(r);
             }
 
-            // Update trail
-            ball.trail.push({x: ball.x, y: ball.y, z: ball.z, h: ball.color.h});
-            if (ball.trail.length > 30) ball.trail.shift();
+            rotateY(angle) {
+                const c = Math.cos(angle), s = Math.sin(angle);
+                const r = new Matrix4();
+                r.m[0] = c; r.m[2] = s;
+                r.m[8] = -s; r.m[10] = c;
+                return this.multiply(r);
+            }
+
+            rotateZ(angle) {
+                const c = Math.cos(angle), s = Math.sin(angle);
+                const r = new Matrix4();
+                r.m[0] = c; r.m[1] = -s;
+                r.m[4] = s; r.m[5] = c;
+                return this.multiply(r);
+            }
+
+            transformPoint(v) {
+                const m = this.m;
+                return new Vec3(
+                    m[0] * v.x + m[1] * v.y + m[2] * v.z + m[3],
+                    m[4] * v.x + m[5] * v.y + m[6] * v.z + m[7],
+                    m[8] * v.x + m[9] * v.y + m[10] * v.z + m[11]
+                );
+            }
+
+            transformVector(v) {
+                const m = this.m;
+                return new Vec3(
+                    m[0] * v.x + m[1] * v.y + m[2] * v.z,
+                    m[4] * v.x + m[5] * v.y + m[6] * v.z,
+                    m[8] * v.x + m[9] * v.y + m[10] * v.z
+                );
+            }
         }
 
-        function draw() {
-            ctx.fillStyle = 'rgba(26, 26, 46, 0.3)';
-            ctx.fillRect(0, 0, W, H);
+        // ==================== POLYHEDRON GEOMETRY ====================
+        const Polyhedra = {
+            tetrahedron: () => {
+                const a = 1 / Math.sqrt(2);
+                const vertices = [
+                    new Vec3(1, 0, -a), new Vec3(-1, 0, -a),
+                    new Vec3(0, 1, a), new Vec3(0, -1, a)
+                ];
+                const faces = [[0, 1, 2], [0, 2, 3], [0, 3, 1], [1, 3, 2]];
+                return { vertices, faces };
+            },
 
-            if (rotating) {
-                angleX += rotSpeed;
-                angleY += rotSpeed * 0.7;
-                angleZ += rotSpeed * 0.3;
+            cube: () => {
+                const s = 0.7;
+                const vertices = [
+                    new Vec3(-s, -s, -s), new Vec3(s, -s, -s),
+                    new Vec3(s, s, -s), new Vec3(-s, s, -s),
+                    new Vec3(-s, -s, s), new Vec3(s, -s, s),
+                    new Vec3(s, s, s), new Vec3(-s, s, s)
+                ];
+                const faces = [
+                    [0, 1, 2, 3], [5, 4, 7, 6], [1, 5, 6, 2],
+                    [4, 0, 3, 7], [3, 2, 6, 7], [4, 5, 1, 0]
+                ];
+                return { vertices, faces };
+            },
+
+            octahedron: () => {
+                const vertices = [
+                    new Vec3(1, 0, 0), new Vec3(-1, 0, 0),
+                    new Vec3(0, 1, 0), new Vec3(0, -1, 0),
+                    new Vec3(0, 0, 1), new Vec3(0, 0, -1)
+                ];
+                const faces = [
+                    [0, 2, 4], [0, 4, 3], [0, 3, 5], [0, 5, 2],
+                    [1, 4, 2], [1, 3, 4], [1, 5, 3], [1, 2, 5]
+                ];
+                return { vertices, faces };
+            },
+
+            icosahedron: () => {
+                const phi = (1 + Math.sqrt(5)) / 2;
+                const a = 1, b = 1 / phi;
+                const vertices = [
+                    new Vec3(0, b, -a), new Vec3(b, a, 0), new Vec3(-b, a, 0),
+                    new Vec3(0, b, a), new Vec3(0, -b, a), new Vec3(-a, 0, b),
+                    new Vec3(0, -b, -a), new Vec3(a, 0, -b), new Vec3(a, 0, b),
+                    new Vec3(-a, 0, -b), new Vec3(b, -a, 0), new Vec3(-b, -a, 0)
+                ].map(v => v.normalize());
+                const faces = [
+                    [0, 1, 2], [3, 2, 1], [3, 4, 5], [3, 8, 4],
+                    [0, 6, 7], [0, 9, 6], [4, 10, 11], [6, 11, 10],
+                    [2, 5, 9], [11, 9, 5], [1, 7, 8], [10, 8, 7],
+                    [3, 5, 2], [3, 1, 8], [0, 2, 9], [0, 7, 1],
+                    [6, 9, 11], [6, 10, 7], [4, 11, 5], [4, 8, 10]
+                ];
+                return { vertices, faces };
+            },
+
+            dodecahedron: () => {
+                const phi = (1 + Math.sqrt(5)) / 2;
+                const a = 1, b = 1 / phi, c = 2 - phi;
+                const vertices = [
+                    new Vec3(c, 0, a), new Vec3(-c, 0, a), new Vec3(-b, b, b),
+                    new Vec3(0, a, c), new Vec3(b, b, b), new Vec3(b, -b, b),
+                    new Vec3(0, -a, c), new Vec3(-b, -b, b), new Vec3(c, 0, -a),
+                    new Vec3(-c, 0, -a), new Vec3(-b, -b, -b), new Vec3(0, -a, -c),
+                    new Vec3(b, -b, -b), new Vec3(b, b, -b), new Vec3(0, a, -c),
+                    new Vec3(-b, b, -b), new Vec3(a, c, 0), new Vec3(-a, c, 0),
+                    new Vec3(-a, -c, 0), new Vec3(a, -c, 0)
+                ].map(v => v.normalize());
+                const faces = [
+                    [0, 1, 2, 3, 4], [0, 5, 6, 7, 1], [8, 9, 10, 11, 12],
+                    [8, 13, 14, 15, 9], [16, 4, 3, 14, 13], [17, 2, 1, 7, 18],
+                    [19, 5, 0, 4, 16], [6, 5, 19, 12, 11], [18, 7, 6, 11, 10],
+                    [9, 15, 17, 18, 10], [15, 14, 3, 2, 17], [8, 12, 19, 16, 13]
+                ];
+                return { vertices, faces };
+            },
+
+            stellated: () => {
+                const oct = Polyhedra.octahedron();
+                const vertices = [...oct.vertices];
+                const scale = 1.8;
+
+                oct.faces.forEach(face => {
+                    const center = face.reduce((acc, i) => acc.add(vertices[i]), new Vec3()).mul(1/3);
+                    vertices.push(center.normalize().mul(scale));
+                });
+
+                const faces = [];
+                oct.faces.forEach((face, i) => {
+                    const tip = 6 + i;
+                    for (let j = 0; j < 3; j++) {
+                        faces.push([face[j], face[(j + 1) % 3], tip]);
+                    }
+                });
+
+                return { vertices, faces };
+            }
+        };
+
+        // ==================== BALL PHYSICS ====================
+        class Ball {
+            constructor(position, velocity, color, radius = 0.08) {
+                this.pos = position;
+                this.vel = velocity;
+                this.color = color;
+                this.radius = radius;
+                this.trail = [];
+                this.maxTrail = 50;
+                this.spin = new Vec3(
+                    (Math.random() - 0.5) * 2,
+                    (Math.random() - 0.5) * 2,
+                    (Math.random() - 0.5) * 2
+                );
+                this.glowIntensity = 1;
             }
 
-            updateBall();
+            update(dt, gravity, faces, polyMatrix) {
+                // Apply gravity in world space
+                this.vel = this.vel.add(new Vec3(0, -gravity * dt, 0));
 
-            // Get rotated and projected vertices
-            const rotatedVerts = vertices.map(v => rotatePoint(v, angleX, angleY, angleZ));
-            const projectedVerts = rotatedVerts.map(v => project(v));
+                // Store old position for trail
+                const oldPos = this.pos.clone();
 
-            // Sort faces by depth (painter's algorithm)
-            const facesWithDepth = faces.map((face, i) => {
-                const avgZ = face.reduce((sum, vi) => sum + rotatedVerts[vi][2], 0) / face.length;
-                return { face, avgZ, index: i };
-            }).sort((a, b) => a.avgZ - b.avgZ);
+                // Update position
+                this.pos = this.pos.add(this.vel.mul(dt));
 
-            // Draw faces
-            for (let { face, avgZ } of facesWithDepth) {
-                const normal = faceNormal(face, rotatedVerts);
-                if (normal[2] < 0) continue; // Back-face culling
+                // Update spin decay
+                this.spin = this.spin.mul(0.999);
 
-                ctx.beginPath();
-                const [sx, sy] = projectedVerts[face[0]];
-                ctx.moveTo(sx, sy);
-                for (let i = 1; i < face.length; i++) {
-                    const [x, y] = projectedVerts[face[i]];
-                    ctx.lineTo(x, y);
+                // Decay glow
+                this.glowIntensity = Math.max(1, this.glowIntensity * 0.95);
+
+                // Update trail
+                if (this.trail.length === 0 || this.trail[this.trail.length - 1].sub(this.pos).length() > 0.02) {
+                    this.trail.push(this.pos.clone());
+                    if (this.trail.length > this.maxTrail) {
+                        this.trail.shift();
+                    }
                 }
-                ctx.closePath();
 
-                const brightness = Math.max(0.2, Math.min(1, (avgZ + 200) / 400));
-                ctx.fillStyle = `rgba(0, 200, 255, ${brightness * 0.15})`;
-                ctx.fill();
-                ctx.strokeStyle = `rgba(0, 255, 255, ${brightness * 0.8})`;
-                ctx.lineWidth = 2;
-                ctx.stroke();
+                // Check collision with faces
+                return this.checkCollisions(faces, polyMatrix);
             }
 
-            // Draw ball trail
-            for (let i = 0; i < ball.trail.length; i++) {
-                const t = ball.trail[i];
-                const rotated = rotatePoint([t.x, t.y, t.z], angleX, angleY, angleZ);
-                const [px, py, scale] = project(rotated);
-                const alpha = i / ball.trail.length * 0.5;
-                ctx.beginPath();
-                ctx.arc(px, py, ball.radius * scale * 0.5, 0, Math.PI * 2);
-                ctx.fillStyle = `hsla(${t.h}, 100%, 60%, ${alpha})`;
-                ctx.fill();
+            checkCollisions(faces, polyMatrix) {
+                let collision = null;
+
+                for (const face of faces) {
+                    // Transform face vertices to world space
+                    const worldVerts = face.vertices.map(v => polyMatrix.transformPoint(v));
+                    const worldNormal = polyMatrix.transformVector(face.normal).normalize();
+
+                    // Calculate face center
+                    const center = worldVerts.reduce((acc, v) => acc.add(v), new Vec3()).mul(1 / worldVerts.length);
+
+                    // Distance from ball to plane
+                    const dist = this.pos.sub(center).dot(worldNormal);
+
+                    if (dist < this.radius && dist > -this.radius * 2) {
+                        // Check if ball is inside face polygon (simplified)
+                        const toCenter = center.sub(this.pos);
+                        const distToCenter = toCenter.length();
+
+                        if (distToCenter < 1.5) { // Approximate containment check
+                            // Collision response
+                            const velNormal = this.vel.dot(worldNormal);
+
+                            if (velNormal < 0) {
+                                // Reflect velocity
+                                const restitution = 0.85;
+                                this.vel = this.vel.sub(worldNormal.mul(velNormal * (1 + restitution)));
+
+                                // Add spin from collision
+                                const tangent = this.vel.sub(worldNormal.mul(this.vel.dot(worldNormal)));
+                                this.spin = this.spin.add(tangent.cross(worldNormal).mul(0.5));
+
+                                // Push ball out of face
+                                this.pos = this.pos.add(worldNormal.mul(this.radius - dist + 0.01));
+
+                                // Boost glow on collision
+                                this.glowIntensity = 3;
+
+                                collision = {
+                                    point: this.pos.clone(),
+                                    normal: worldNormal,
+                                    velocity: Math.abs(velNormal)
+                                };
+                            }
+                        }
+                    }
+                }
+
+                return collision;
+            }
+        }
+
+        // ==================== PARTICLE SYSTEM ====================
+        class Particle {
+            constructor(pos, vel, color, life = 1) {
+                this.pos = pos;
+                this.vel = vel;
+                this.color = color;
+                this.life = life;
+                this.maxLife = life;
+                this.size = 3 + Math.random() * 3;
             }
 
-            // Draw ball
-            const rotatedBall = rotatePoint([ball.x, ball.y, ball.z], angleX, angleY, angleZ);
-            const [bx, by, bScale] = project(rotatedBall);
-
-            const gradient = ctx.createRadialGradient(bx - 5, by - 5, 0, bx, by, ball.radius * bScale);
-            gradient.addColorStop(0, `hsla(${ball.color.h}, 100%, 80%, 1)`);
-            gradient.addColorStop(0.5, `hsla(${ball.color.h}, 100%, 60%, 1)`);
-            gradient.addColorStop(1, `hsla(${ball.color.h}, 100%, 40%, 1)`);
-
-            ctx.beginPath();
-            ctx.arc(bx, by, ball.radius * bScale, 0, Math.PI * 2);
-            ctx.fillStyle = gradient;
-            ctx.fill();
-
-            // Ball glow
-            ctx.shadowColor = `hsla(${ball.color.h}, 100%, 60%, 0.8)`;
-            ctx.shadowBlur = 20;
-            ctx.beginPath();
-            ctx.arc(bx, by, ball.radius * bScale * 0.8, 0, Math.PI * 2);
-            ctx.fillStyle = `hsla(${ball.color.h}, 100%, 70%, 0.5)`;
-            ctx.fill();
-            ctx.shadowBlur = 0;
-
-            requestAnimationFrame(draw);
+            update(dt) {
+                this.pos = this.pos.add(this.vel.mul(dt));
+                this.vel = this.vel.mul(0.98);
+                this.life -= dt;
+                return this.life > 0;
+            }
         }
 
-        function toggleRotation() {
-            rotating = !rotating;
+        // ==================== MAIN APPLICATION ====================
+        class PolyhedronDemo {
+            constructor() {
+                this.canvas = document.getElementById('canvas');
+                this.ctx = this.canvas.getContext('2d');
+
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+
+                // State
+                this.polyType = 'icosahedron';
+                this.theme = 'cyberpunk';
+                this.rotation = new Vec3(0, 0, 0);
+                this.rotationSpeed = 0.5;
+                this.gravity = 0.5;
+                this.trailLength = 0.5;
+
+                // Camera
+                this.cameraMode = 'orbit';
+                this.cameraAngleX = 0.3;
+                this.cameraAngleY = 0;
+                this.cameraDistance = 4;
+                this.cameraTarget = new Vec3(0, 0, 0);
+
+                // Objects
+                this.polyhedron = null;
+                this.balls = [];
+                this.particles = [];
+                this.collisionCount = 0;
+
+                // Sound visualization
+                this.soundBars = [];
+                this.initSoundBars();
+
+                // FPS tracking
+                this.lastTime = 0;
+                this.frameCount = 0;
+                this.fps = 60;
+
+                // Input
+                this.isDragging = false;
+                this.lastMouseX = 0;
+                this.lastMouseY = 0;
+
+                this.setupEventListeners();
+                this.initPolyhedron();
+                this.initBalls(3);
+                this.updateTheme();
+
+                requestAnimationFrame((t) => this.animate(t));
+            }
+
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+                this.centerX = this.canvas.width / 2;
+                this.centerY = this.canvas.height / 2;
+                this.scale = Math.min(this.canvas.width, this.canvas.height) * 0.25;
+            }
+
+            initSoundBars() {
+                const container = document.getElementById('sound-bars');
+                container.innerHTML = '';
+                for (let i = 0; i < 32; i++) {
+                    const bar = document.createElement('div');
+                    bar.className = 'sound-bar';
+                    bar.style.height = '5px';
+                    container.appendChild(bar);
+                    this.soundBars.push({ element: bar, value: 0, target: 0 });
+                }
+            }
+
+            initPolyhedron() {
+                const data = Polyhedra[this.polyType]();
+                this.polyhedron = {
+                    vertices: data.vertices.map(v => v.mul(1.2)),
+                    faces: data.faces.map(face => {
+                        const verts = face.map(i => data.vertices[i].mul(1.2));
+                        const v1 = verts[1].sub(verts[0]);
+                        const v2 = verts[2].sub(verts[0]);
+                        const normal = v1.cross(v2).normalize();
+                        return { indices: face, vertices: verts, normal };
+                    })
+                };
+            }
+
+            initBalls(count) {
+                const theme = CONFIG.themes[this.theme];
+                const colors = [theme.primary, theme.secondary, theme.accent];
+
+                this.balls = [];
+                for (let i = 0; i < count; i++) {
+                    const pos = new Vec3(
+                        (Math.random() - 0.5) * 0.5,
+                        (Math.random() - 0.5) * 0.5,
+                        (Math.random() - 0.5) * 0.5
+                    );
+                    const vel = new Vec3(
+                        (Math.random() - 0.5) * 2,
+                        (Math.random() - 0.5) * 2,
+                        (Math.random() - 0.5) * 2
+                    );
+                    this.balls.push(new Ball(pos, vel, colors[i % colors.length]));
+                }
+            }
+
+            updateTheme() {
+                const theme = CONFIG.themes[this.theme];
+                document.body.style.background = `linear-gradient(135deg, ${theme.bg.join(', ')})`;
+                document.getElementById('impact-flash').style.background = `radial-gradient(circle, ${theme.glow}, transparent)`;
+                document.documentElement.style.setProperty('--accent-color', theme.primary);
+
+                // Update ball colors
+                const colors = [theme.primary, theme.secondary, theme.accent];
+                this.balls.forEach((ball, i) => {
+                    ball.color = colors[i % colors.length];
+                });
+            }
+
+            setupEventListeners() {
+                // Mouse controls
+                this.canvas.addEventListener('mousedown', (e) => {
+                    this.isDragging = true;
+                    this.lastMouseX = e.clientX;
+                    this.lastMouseY = e.clientY;
+                });
+
+                window.addEventListener('mousemove', (e) => {
+                    if (this.isDragging) {
+                        const dx = e.clientX - this.lastMouseX;
+                        const dy = e.clientY - this.lastMouseY;
+                        this.cameraAngleY += dx * 0.005;
+                        this.cameraAngleX += dy * 0.005;
+                        this.cameraAngleX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.cameraAngleX));
+                        this.lastMouseX = e.clientX;
+                        this.lastMouseY = e.clientY;
+                    }
+                });
+
+                window.addEventListener('mouseup', () => {
+                    this.isDragging = false;
+                });
+
+                this.canvas.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    this.cameraDistance += e.deltaY * 0.005;
+                    this.cameraDistance = Math.max(2, Math.min(10, this.cameraDistance));
+                });
+
+                // Touch controls
+                this.canvas.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    if (e.touches.length === 1) {
+                        this.isDragging = true;
+                        this.lastMouseX = e.touches[0].clientX;
+                        this.lastMouseY = e.touches[0].clientY;
+                    }
+                });
+
+                this.canvas.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    if (this.isDragging && e.touches.length === 1) {
+                        const dx = e.touches[0].clientX - this.lastMouseX;
+                        const dy = e.touches[0].clientY - this.lastMouseY;
+                        this.cameraAngleY += dx * 0.005;
+                        this.cameraAngleX += dy * 0.005;
+                        this.cameraAngleX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.cameraAngleX));
+                        this.lastMouseX = e.touches[0].clientX;
+                        this.lastMouseY = e.touches[0].clientY;
+                    } else if (e.touches.length === 2) {
+                        // Pinch zoom
+                        const dist = Math.hypot(
+                            e.touches[0].clientX - e.touches[1].clientX,
+                            e.touches[0].clientY - e.touches[1].clientY
+                        );
+                        if (this.lastPinchDist) {
+                            this.cameraDistance -= (dist - this.lastPinchDist) * 0.01;
+                            this.cameraDistance = Math.max(2, Math.min(10, this.cameraDistance));
+                        }
+                        this.lastPinchDist = dist;
+                    }
+                });
+
+                this.canvas.addEventListener('touchend', () => {
+                    this.isDragging = false;
+                    this.lastPinchDist = null;
+                });
+
+                // UI Controls
+                document.getElementById('polyhedron-select').addEventListener('change', (e) => {
+                    this.polyType = e.target.value;
+                    this.initPolyhedron();
+                });
+
+                document.getElementById('ball-count').addEventListener('input', (e) => {
+                    document.getElementById('ball-count-value').textContent = e.target.value;
+                    const newCount = parseInt(e.target.value);
+                    while (this.balls.length < newCount) {
+                        this.addBall();
+                    }
+                    while (this.balls.length > newCount) {
+                        this.balls.pop();
+                    }
+                });
+
+                document.getElementById('rotation-speed').addEventListener('input', (e) => {
+                    document.getElementById('rotation-value').textContent = e.target.value;
+                    this.rotationSpeed = e.target.value / 100;
+                });
+
+                document.getElementById('gravity').addEventListener('input', (e) => {
+                    document.getElementById('gravity-value').textContent = e.target.value;
+                    this.gravity = e.target.value / 100;
+                });
+
+                document.getElementById('trail-length').addEventListener('input', (e) => {
+                    document.getElementById('trail-value').textContent = e.target.value;
+                    this.trailLength = e.target.value / 100;
+                    this.balls.forEach(ball => {
+                        ball.maxTrail = Math.floor(e.target.value);
+                    });
+                });
+
+                document.getElementById('camera-mode').addEventListener('change', (e) => {
+                    this.cameraMode = e.target.value;
+                });
+
+                document.querySelectorAll('.theme-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        this.theme = btn.dataset.theme;
+                        this.updateTheme();
+                    });
+                });
+
+                document.getElementById('reset-btn').addEventListener('click', () => {
+                    this.collisionCount = 0;
+                    this.initBalls(this.balls.length);
+                    this.particles = [];
+                });
+
+                document.getElementById('add-ball-btn').addEventListener('click', () => {
+                    this.addBall();
+                    document.getElementById('ball-count').value = this.balls.length;
+                    document.getElementById('ball-count-value').textContent = this.balls.length;
+                });
+            }
+
+            addBall() {
+                const theme = CONFIG.themes[this.theme];
+                const colors = [theme.primary, theme.secondary, theme.accent];
+                const pos = new Vec3(
+                    (Math.random() - 0.5) * 0.3,
+                    0.5,
+                    (Math.random() - 0.5) * 0.3
+                );
+                const vel = new Vec3(
+                    (Math.random() - 0.5) * 3,
+                    (Math.random() - 0.5) * 3,
+                    (Math.random() - 0.5) * 3
+                );
+                this.balls.push(new Ball(pos, vel, colors[this.balls.length % colors.length]));
+            }
+
+            triggerCollisionEffect(collision) {
+                this.collisionCount++;
+
+                // Flash effect
+                const flash = document.getElementById('impact-flash');
+                flash.style.opacity = Math.min(0.3, collision.velocity * 0.1);
+                setTimeout(() => flash.style.opacity = 0, 50);
+
+                // Sound bars
+                const intensity = Math.min(1, collision.velocity * 0.3);
+                const centerBar = Math.floor(Math.random() * this.soundBars.length);
+                for (let i = 0; i < this.soundBars.length; i++) {
+                    const dist = Math.abs(i - centerBar);
+                    const height = Math.max(0, intensity - dist * 0.05) * 60;
+                    this.soundBars[i].target = Math.max(this.soundBars[i].target, height);
+                }
+
+                // Spawn particles
+                const theme = CONFIG.themes[this.theme];
+                for (let i = 0; i < 15; i++) {
+                    const vel = new Vec3(
+                        (Math.random() - 0.5) * 2 + collision.normal.x,
+                        (Math.random() - 0.5) * 2 + collision.normal.y,
+                        (Math.random() - 0.5) * 2 + collision.normal.z
+                    );
+                    this.particles.push(new Particle(
+                        collision.point.clone(),
+                        vel,
+                        [theme.primary, theme.secondary, theme.accent][Math.floor(Math.random() * 3)],
+                        0.5 + Math.random() * 0.5
+                    ));
+                }
+            }
+
+            project(point, cameraMatrix) {
+                const transformed = cameraMatrix.transformPoint(point);
+                const perspective = this.cameraDistance / (this.cameraDistance + transformed.z);
+                return {
+                    x: this.centerX + transformed.x * this.scale * perspective,
+                    y: this.centerY - transformed.y * this.scale * perspective,
+                    z: transformed.z,
+                    scale: perspective
+                };
+            }
+
+            animate(time) {
+                const dt = Math.min((time - this.lastTime) / 1000, 0.05);
+                this.lastTime = time;
+
+                // FPS calculation
+                this.frameCount++;
+                if (this.frameCount >= 30) {
+                    this.fps = Math.round(30 / ((time - this.fpsTime) / 1000));
+                    this.fpsTime = time;
+                    this.frameCount = 0;
+                }
+                if (!this.fpsTime) this.fpsTime = time;
+
+                // Update rotation
+                this.rotation.x += dt * this.rotationSpeed * 0.3;
+                this.rotation.y += dt * this.rotationSpeed * 0.5;
+                this.rotation.z += dt * this.rotationSpeed * 0.2;
+
+                // Build matrices
+                const polyMatrix = new Matrix4()
+                    .rotateX(this.rotation.x)
+                    .rotateY(this.rotation.y)
+                    .rotateZ(this.rotation.z);
+
+                // Update camera
+                let camAngleX = this.cameraAngleX;
+                let camAngleY = this.cameraAngleY;
+
+                if (this.cameraMode === 'follow' && this.balls.length > 0) {
+                    const ballPos = this.balls[0].pos;
+                    camAngleY = Math.atan2(ballPos.x, ballPos.z);
+                    camAngleX = Math.atan2(ballPos.y, Math.sqrt(ballPos.x * ballPos.x + ballPos.z * ballPos.z));
+                } else if (this.cameraMode === 'dynamic') {
+                    camAngleY += dt * 0.2;
+                    camAngleX = Math.sin(time * 0.0005) * 0.3;
+                }
+
+                const cameraMatrix = new Matrix4()
+                    .rotateX(camAngleX)
+                    .rotateY(camAngleY);
+
+                // Update balls
+                for (const ball of this.balls) {
+                    const collision = ball.update(dt, this.gravity * 10, this.polyhedron.faces, polyMatrix);
+                    if (collision) {
+                        this.triggerCollisionEffect(collision);
+                    }
+                }
+
+                // Update particles
+                this.particles = this.particles.filter(p => p.update(dt));
+
+                // Update sound bars
+                for (const bar of this.soundBars) {
+                    bar.value += (bar.target - bar.value) * 0.3;
+                    bar.target *= 0.9;
+                    bar.element.style.height = Math.max(5, bar.value) + 'px';
+                }
+
+                // Render
+                this.render(polyMatrix, cameraMatrix);
+
+                // Update stats
+                const avgVel = this.balls.reduce((acc, b) => acc + b.vel.length(), 0) / this.balls.length;
+                const totalEnergy = this.balls.reduce((acc, b) => acc + b.vel.length() * b.vel.length() * 0.5, 0);
+                const avgSpin = this.balls.reduce((acc, b) => acc + b.spin.length(), 0) / this.balls.length;
+
+                document.getElementById('velocity').textContent = avgVel.toFixed(2);
+                document.getElementById('collisions').textContent = this.collisionCount;
+                document.getElementById('energy').textContent = totalEnergy.toFixed(2);
+                document.getElementById('spin').textContent = avgSpin.toFixed(2);
+                document.getElementById('fps').textContent = this.fps;
+
+                requestAnimationFrame((t) => this.animate(t));
+            }
+
+            render(polyMatrix, cameraMatrix) {
+                const ctx = this.ctx;
+                const theme = CONFIG.themes[this.theme];
+
+                // Clear with motion blur effect
+                ctx.fillStyle = `rgba(0, 0, 0, ${0.1 + (1 - this.trailLength) * 0.2})`;
+                ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+                // Collect all faces with their depths for sorting
+                const projectedFaces = [];
+
+                for (const face of this.polyhedron.faces) {
+                    const worldVerts = face.vertices.map(v => polyMatrix.transformPoint(v));
+                    const projVerts = worldVerts.map(v => this.project(v, cameraMatrix));
+                    const avgZ = projVerts.reduce((acc, v) => acc + v.z, 0) / projVerts.length;
+
+                    // Calculate normal direction for back-face culling
+                    const worldNormal = polyMatrix.transformVector(face.normal);
+                    const cameraNormal = cameraMatrix.transformVector(worldNormal);
+
+                    projectedFaces.push({
+                        verts: projVerts,
+                        worldVerts,
+                        avgZ,
+                        normal: cameraNormal,
+                        facing: cameraNormal.z
+                    });
+                }
+
+                // Sort by depth (back to front)
+                projectedFaces.sort((a, b) => b.avgZ - a.avgZ);
+
+                // Draw faces
+                for (const face of projectedFaces) {
+                    const { verts, facing } = face;
+
+                    // Only draw front-facing faces with transparency for back faces
+                    const alpha = facing > 0 ? 0.3 : 0.1;
+                    const strokeAlpha = facing > 0 ? 0.8 : 0.3;
+
+                    ctx.beginPath();
+                    ctx.moveTo(verts[0].x, verts[0].y);
+                    for (let i = 1; i < verts.length; i++) {
+                        ctx.lineTo(verts[i].x, verts[i].y);
+                    }
+                    ctx.closePath();
+
+                    // Fill with gradient
+                    const gradient = ctx.createLinearGradient(
+                        verts[0].x, verts[0].y,
+                        verts[verts.length - 1].x, verts[verts.length - 1].y
+                    );
+                    gradient.addColorStop(0, this.hexToRgba(theme.primary, alpha * 0.5));
+                    gradient.addColorStop(1, this.hexToRgba(theme.secondary, alpha * 0.3));
+                    ctx.fillStyle = gradient;
+                    ctx.fill();
+
+                    // Stroke edges with glow
+                    ctx.strokeStyle = this.hexToRgba(theme.primary, strokeAlpha);
+                    ctx.lineWidth = 2;
+                    ctx.shadowColor = theme.primary;
+                    ctx.shadowBlur = facing > 0 ? 15 : 5;
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                }
+
+                // Draw particles
+                for (const particle of this.particles) {
+                    const proj = this.project(particle.pos, cameraMatrix);
+                    if (proj.z > -this.cameraDistance) {
+                        const alpha = particle.life / particle.maxLife;
+                        const size = particle.size * proj.scale * alpha;
+
+                        ctx.beginPath();
+                        ctx.arc(proj.x, proj.y, size, 0, Math.PI * 2);
+                        ctx.fillStyle = this.hexToRgba(particle.color, alpha);
+                        ctx.shadowColor = particle.color;
+                        ctx.shadowBlur = 10;
+                        ctx.fill();
+                        ctx.shadowBlur = 0;
+                    }
+                }
+
+                // Draw ball trails and balls
+                for (const ball of this.balls) {
+                    // Draw trail
+                    if (ball.trail.length > 1) {
+                        ctx.beginPath();
+                        const firstProj = this.project(ball.trail[0], cameraMatrix);
+                        ctx.moveTo(firstProj.x, firstProj.y);
+
+                        for (let i = 1; i < ball.trail.length; i++) {
+                            const proj = this.project(ball.trail[i], cameraMatrix);
+                            ctx.lineTo(proj.x, proj.y);
+                        }
+
+                        const gradient = ctx.createLinearGradient(
+                            firstProj.x, firstProj.y,
+                            this.project(ball.trail[ball.trail.length - 1], cameraMatrix).x,
+                            this.project(ball.trail[ball.trail.length - 1], cameraMatrix).y
+                        );
+                        gradient.addColorStop(0, this.hexToRgba(ball.color, 0));
+                        gradient.addColorStop(1, this.hexToRgba(ball.color, 0.8));
+                        ctx.strokeStyle = gradient;
+                        ctx.lineWidth = 3;
+                        ctx.stroke();
+                    }
+
+                    // Draw ball with glow
+                    const ballProj = this.project(ball.pos, cameraMatrix);
+                    const ballSize = ball.radius * this.scale * ballProj.scale;
+
+                    // Outer glow
+                    const glowGradient = ctx.createRadialGradient(
+                        ballProj.x, ballProj.y, 0,
+                        ballProj.x, ballProj.y, ballSize * 3 * ball.glowIntensity
+                    );
+                    glowGradient.addColorStop(0, this.hexToRgba(ball.color, 0.5));
+                    glowGradient.addColorStop(0.5, this.hexToRgba(ball.color, 0.2));
+                    glowGradient.addColorStop(1, 'transparent');
+                    ctx.beginPath();
+                    ctx.arc(ballProj.x, ballProj.y, ballSize * 3 * ball.glowIntensity, 0, Math.PI * 2);
+                    ctx.fillStyle = glowGradient;
+                    ctx.fill();
+
+                    // Ball body
+                    const bodyGradient = ctx.createRadialGradient(
+                        ballProj.x - ballSize * 0.3, ballProj.y - ballSize * 0.3, 0,
+                        ballProj.x, ballProj.y, ballSize
+                    );
+                    bodyGradient.addColorStop(0, '#ffffff');
+                    bodyGradient.addColorStop(0.3, ball.color);
+                    bodyGradient.addColorStop(1, this.hexToRgba(ball.color, 0.8));
+
+                    ctx.beginPath();
+                    ctx.arc(ballProj.x, ballProj.y, ballSize, 0, Math.PI * 2);
+                    ctx.fillStyle = bodyGradient;
+                    ctx.shadowColor = ball.color;
+                    ctx.shadowBlur = 20 * ball.glowIntensity;
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+
+                    // Specular highlight
+                    ctx.beginPath();
+                    ctx.arc(
+                        ballProj.x - ballSize * 0.3,
+                        ballProj.y - ballSize * 0.3,
+                        ballSize * 0.25,
+                        0, Math.PI * 2
+                    );
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                    ctx.fill();
+                }
+
+                // Draw vertex points
+                for (const vertex of this.polyhedron.vertices) {
+                    const worldVert = polyMatrix.transformPoint(vertex);
+                    const proj = this.project(worldVert, cameraMatrix);
+
+                    ctx.beginPath();
+                    ctx.arc(proj.x, proj.y, 3 * proj.scale, 0, Math.PI * 2);
+                    ctx.fillStyle = theme.accent;
+                    ctx.shadowColor = theme.accent;
+                    ctx.shadowBlur = 10;
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                }
+            }
+
+            hexToRgba(hex, alpha) {
+                const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                if (!result) {
+                    // Handle short hex or named colors
+                    if (hex.startsWith('#') && hex.length === 4) {
+                        const r = parseInt(hex[1] + hex[1], 16);
+                        const g = parseInt(hex[2] + hex[2], 16);
+                        const b = parseInt(hex[3] + hex[3], 16);
+                        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                    }
+                    return hex;
+                }
+                return `rgba(${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}, ${alpha})`;
+            }
         }
 
-        function resetBall() {
-            ball.x = 0; ball.y = 0; ball.z = 0;
-            ball.vx = (Math.random() - 0.5) * 4;
-            ball.vy = (Math.random() - 0.5) * 4;
-            ball.vz = (Math.random() - 0.5) * 4;
-            ball.trail = [];
-        }
-
-        function changePolyhedron() {
-            polyType = (polyType + 1) % polyTypes.length;
-            vertices = generatePolyhedron(polyTypes[polyType]);
-            faces = getFaces(polyTypes[polyType]);
-            resetBall();
-        }
-
-        draw();
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', () => {
+            new PolyhedronDemo();
+        });
     </script>
 </body>
 </html>
