@@ -3,2177 +3,395 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spectacular Particle System & Fireworks</title>
+    <title>Particle System & Fireworks</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            background: #000;
-            overflow: hidden;
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            color: #fff;
-        }
-
-        #canvas {
-            position: fixed;
-            top: 0;
-            left: 0;
-            z-index: 1;
-        }
-
-        #bloomCanvas {
-            position: fixed;
-            top: 0;
-            left: 0;
-            z-index: 2;
-            pointer-events: none;
-            mix-blend-mode: screen;
-        }
-
-        .controls {
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #000; overflow: hidden; font-family: system-ui, sans-serif; }
+        canvas { display: block; }
+        .ui {
             position: fixed;
             top: 10px;
             left: 10px;
+            color: #fff;
+            font-size: 14px;
             z-index: 100;
-            background: rgba(0, 0, 0, 0.85);
+            background: rgba(0,0,0,0.7);
             padding: 15px;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            max-height: 90vh;
-            overflow-y: auto;
-            width: 280px;
-            transition: transform 0.3s ease;
+            border-radius: 10px;
         }
-
-        .controls::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .controls::-webkit-scrollbar-track {
-            background: rgba(255,255,255,0.05);
-            border-radius: 3px;
-        }
-
-        .controls::-webkit-scrollbar-thumb {
-            background: rgba(255,255,255,0.2);
-            border-radius: 3px;
-        }
-
-        .controls.collapsed {
-            transform: translateX(-260px);
-        }
-
-        .controls.collapsed .toggle-btn {
-            transform: rotate(180deg);
-        }
-
-        .toggle-btn {
-            position: absolute;
-            right: -30px;
-            top: 10px;
-            width: 30px;
-            height: 40px;
-            background: rgba(0, 0, 0, 0.85);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-left: none;
-            border-radius: 0 8px 8px 0;
-            color: #fff;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: transform 0.3s ease;
-        }
-
-        .section {
-            margin-bottom: 15px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .section:last-child {
-            border-bottom: none;
-            margin-bottom: 0;
-            padding-bottom: 0;
-        }
-
-        h3 {
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: #888;
-            margin-bottom: 10px;
-        }
-
-        .btn-group {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 5px;
-        }
-
+        .stats { margin-bottom: 15px; }
+        .stat { display: flex; justify-content: space-between; margin: 5px 0; }
+        .stat-value { color: #0f0; font-weight: bold; }
+        .stat-value.warn { color: #ff0; }
+        .stat-value.danger { color: #f00; }
+        .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
         button {
-            background: linear-gradient(135deg, #333, #222);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: #fff;
             padding: 8px 12px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 11px;
-            transition: all 0.2s ease;
-        }
-
-        button:hover {
-            background: linear-gradient(135deg, #444, #333);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        }
-
-        button.active {
-            background: linear-gradient(135deg, #ff6b6b, #ee5a5a);
-            border-color: #ff6b6b;
-        }
-
-        .preset-btn {
-            flex: 1;
-            min-width: 70px;
-        }
-
-        .slider-container {
-            margin: 8px 0;
-        }
-
-        .slider-label {
-            display: flex;
-            justify-content: space-between;
-            font-size: 11px;
-            color: #aaa;
-            margin-bottom: 4px;
-        }
-
-        input[type="range"] {
-            width: 100%;
-            height: 6px;
-            border-radius: 3px;
             background: #333;
-            outline: none;
-            -webkit-appearance: none;
-        }
-
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #ff6b6b, #ee5a5a);
-            cursor: pointer;
-            box-shadow: 0 2px 6px rgba(255, 107, 107, 0.4);
-        }
-
-        input[type="color"] {
-            width: 30px;
-            height: 30px;
+            color: #fff;
             border: none;
-            border-radius: 6px;
+            border-radius: 5px;
             cursor: pointer;
-            background: transparent;
-        }
-
-        .color-row {
-            display: flex;
-            gap: 5px;
-            align-items: center;
-        }
-
-        .stats {
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            z-index: 100;
-            background: rgba(0, 0, 0, 0.85);
-            padding: 12px 15px;
-            border-radius: 8px;
-            font-family: monospace;
             font-size: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
         }
-
-        .stats div {
-            margin: 3px 0;
-        }
-
-        .stat-value {
-            color: #4ecdc4;
-            font-weight: bold;
-        }
-
-        .stat-warning {
-            color: #ffd93d;
-        }
-
-        .stat-danger {
-            color: #ff6b6b;
-        }
-
-        .help {
+        button:hover { background: #555; }
+        button.active { background: #f80; }
+        .info {
             position: fixed;
             bottom: 10px;
             left: 50%;
             transform: translateX(-50%);
-            z-index: 100;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 11px;
-            color: #888;
-            white-space: nowrap;
-        }
-
-        .recording-indicator {
-            position: fixed;
-            top: 60px;
-            right: 10px;
-            z-index: 100;
-            background: rgba(255, 0, 0, 0.8);
-            padding: 8px 15px;
-            border-radius: 20px;
+            color: #666;
             font-size: 12px;
-            display: none;
-            animation: pulse 1s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        .audio-visualizer {
-            position: fixed;
-            bottom: 50px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 50;
-            display: none;
-            gap: 2px;
-        }
-
-        .audio-bar {
-            width: 4px;
-            height: 30px;
-            background: linear-gradient(to top, #ff6b6b, #ffd93d);
-            border-radius: 2px;
-            transform-origin: bottom;
-        }
-
-        @keyframes flashFade {
-            to { opacity: 0; }
         }
     </style>
 </head>
 <body>
-    <canvas id="canvas"></canvas>
-    <canvas id="bloomCanvas"></canvas>
-
-    <div class="controls" id="controls">
-        <button class="toggle-btn" onclick="toggleControls()">&#9664;</button>
-
-        <div class="section">
-            <h3>Presets</h3>
-            <div class="btn-group">
-                <button class="preset-btn" onclick="setPreset('fireworks')">Fireworks</button>
-                <button class="preset-btn" onclick="setPreset('campfire')">Campfire</button>
-                <button class="preset-btn" onclick="setPreset('waterfall')">Waterfall</button>
-                <button class="preset-btn" onclick="setPreset('galaxy')">Galaxy</button>
-                <button class="preset-btn" onclick="setPreset('aurora')">Aurora</button>
-                <button class="preset-btn" onclick="setPreset('rain')">Rain</button>
-                <button class="preset-btn" onclick="setPreset('snow')">Snow</button>
-                <button class="preset-btn" onclick="setPreset('confetti')">Confetti</button>
-                <button class="preset-btn" onclick="setPreset('magic')">Magic</button>
-                <button class="preset-btn" onclick="setPreset('matrix')">Matrix</button>
-            </div>
+    <canvas id="c"></canvas>
+    <div class="ui">
+        <div class="stats">
+            <div class="stat"><span>Particles:</span><span id="count" class="stat-value">0</span></div>
+            <div class="stat"><span>FPS:</span><span id="fps" class="stat-value">60</span></div>
         </div>
-
-        <div class="section">
-            <h3>Particle Type</h3>
-            <div class="btn-group">
-                <button id="type-spark" onclick="setParticleType('spark')">Spark</button>
-                <button id="type-smoke" onclick="setParticleType('smoke')">Smoke</button>
-                <button id="type-fire" onclick="setParticleType('fire')">Fire</button>
-                <button id="type-water" onclick="setParticleType('water')">Water</button>
-                <button id="type-snow" onclick="setParticleType('snow')">Snow</button>
-                <button id="type-confetti" onclick="setParticleType('confetti')">Confetti</button>
-                <button id="type-magic" onclick="setParticleType('magic')">Magic</button>
-            </div>
+        <div class="buttons">
+            <button onclick="setPattern('peony')" class="active">Peony</button>
+            <button onclick="setPattern('chrysanthemum')">Chrysanth</button>
+            <button onclick="setPattern('willow')">Willow</button>
+            <button onclick="setPattern('ring')">Ring</button>
+            <button onclick="setPattern('heart')">Heart</button>
+            <button onclick="setPattern('star')">Star</button>
         </div>
-
-        <div class="section">
-            <h3>Firework Patterns</h3>
-            <div class="btn-group">
-                <button onclick="launchFirework('peony')">Peony</button>
-                <button onclick="launchFirework('chrysanthemum')">Chrys</button>
-                <button onclick="launchFirework('willow')">Willow</button>
-                <button onclick="launchFirework('palm')">Palm</button>
-                <button onclick="launchFirework('ring')">Ring</button>
-                <button onclick="launchFirework('heart')">Heart</button>
-                <button onclick="launchFirework('star')">Star</button>
-                <button onclick="launchFirework('spiral')">Spiral</button>
-                <button onclick="launchFirework('crossette')">Crossette</button>
-                <button onclick="launchFirework('kamuro')">Kamuro</button>
-            </div>
-        </div>
-
-        <div class="section">
-            <h3>Emitter Shape</h3>
-            <div class="btn-group">
-                <button id="emit-point" onclick="setEmitter('point')">Point</button>
-                <button id="emit-line" onclick="setEmitter('line')">Line</button>
-                <button id="emit-circle" onclick="setEmitter('circle')">Circle</button>
-                <button id="emit-rect" onclick="setEmitter('rectangle')">Rectangle</button>
-            </div>
-        </div>
-
-        <div class="section">
-            <h3>Physics</h3>
-            <div class="slider-container">
-                <div class="slider-label"><span>Gravity</span><span id="gravityVal">0.1</span></div>
-                <input type="range" id="gravity" min="-0.5" max="0.5" step="0.01" value="0.1" oninput="updatePhysics()">
-            </div>
-            <div class="slider-container">
-                <div class="slider-label"><span>Wind</span><span id="windVal">0</span></div>
-                <input type="range" id="wind" min="-0.3" max="0.3" step="0.01" value="0" oninput="updatePhysics()">
-            </div>
-            <div class="slider-container">
-                <div class="slider-label"><span>Turbulence</span><span id="turbVal">0</span></div>
-                <input type="range" id="turbulence" min="0" max="0.1" step="0.005" value="0" oninput="updatePhysics()">
-            </div>
-            <div class="slider-container">
-                <div class="slider-label"><span>Friction</span><span id="frictionVal">0.99</span></div>
-                <input type="range" id="friction" min="0.9" max="1" step="0.005" value="0.99" oninput="updatePhysics()">
-            </div>
-        </div>
-
-        <div class="section">
-            <h3>Appearance</h3>
-            <div class="slider-container">
-                <div class="slider-label"><span>Particle Size</span><span id="sizeVal">5</span></div>
-                <input type="range" id="particleSize" min="1" max="20" step="0.5" value="5" oninput="updateAppearance()">
-            </div>
-            <div class="slider-container">
-                <div class="slider-label"><span>Trail Length</span><span id="trailVal">0.1</span></div>
-                <input type="range" id="trailLength" min="0" max="0.5" step="0.01" value="0.1" oninput="updateAppearance()">
-            </div>
-            <div class="slider-container">
-                <div class="slider-label"><span>Bloom Intensity</span><span id="bloomVal">0.5</span></div>
-                <input type="range" id="bloomIntensity" min="0" max="1" step="0.05" value="0.5" oninput="updateAppearance()">
-            </div>
-            <div class="color-row">
-                <span style="font-size: 11px; color: #aaa;">Colors:</span>
-                <input type="color" id="color1" value="#ff6b6b" onchange="updateColors()">
-                <input type="color" id="color2" value="#ffd93d" onchange="updateColors()">
-                <input type="color" id="color3" value="#4ecdc4" onchange="updateColors()">
-            </div>
-        </div>
-
-        <div class="section">
-            <h3>Interaction</h3>
-            <div class="btn-group">
-                <button id="mode-emit" class="active" onclick="setMode('emit')">Emit</button>
-                <button id="mode-attract" onclick="setMode('attract')">Attract</button>
-                <button id="mode-repel" onclick="setMode('repel')">Repel</button>
-                <button id="mode-paint" onclick="setMode('paint')">Paint</button>
-            </div>
-        </div>
-
-        <div class="section">
-            <h3>Audio Reactive</h3>
-            <div class="btn-group">
-                <button id="audioBtn" onclick="toggleAudio()">Enable Microphone</button>
-            </div>
-        </div>
-
-        <div class="section">
-            <h3>Recording</h3>
-            <div class="btn-group">
-                <button id="recordBtn" onclick="toggleRecording()">Start Recording</button>
-                <button onclick="downloadRecording()">Download</button>
-            </div>
-        </div>
-
-        <div class="section">
-            <h3>Actions</h3>
-            <div class="btn-group">
-                <button onclick="clearParticles()">Clear All</button>
-                <button onclick="fireworkShow()">Auto Show</button>
-                <button id="pauseBtn" onclick="togglePause()">Pause</button>
-            </div>
+        <div class="buttons">
+            <button onclick="toggleAuto()" id="autoBtn">Auto: ON</button>
+            <button onclick="clearAll()">Clear</button>
         </div>
     </div>
-
-    <div class="stats">
-        <div>FPS: <span class="stat-value" id="fps">60</span></div>
-        <div>Particles: <span class="stat-value" id="particleCount">0</span> / <span id="maxParticles">2500</span></div>
-        <div>Pool Free: <span class="stat-value" id="poolFree">0</span></div>
-        <div>Memory: <span class="stat-value" id="memoryUsage">stable</span></div>
-    </div>
-
-    <div class="recording-indicator" id="recordingIndicator">Recording...</div>
-
-    <div class="audio-visualizer" id="audioVisualizer"></div>
-
-    <div class="help">
-        Click to emit | Hold for continuous | Scroll to adjust size | Space for firework | 1-8 for patterns
-    </div>
+    <div class="info">Click to launch fireworks</div>
 
     <script>
-        // ============================================
-        // SPECTACULAR PARTICLE SYSTEM & FIREWORKS
-        // High-performance engine with stability fixes
-        // ============================================
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    let W = canvas.width = window.innerWidth;
+    let H = canvas.height = window.innerHeight;
 
-        // === PERFORMANCE CONSTANTS ===
-        const MAX_ACTIVE_PARTICLES = 2500;  // Hard cap on active particles
-        const POOL_SIZE = 3000;             // Reduced pool size for efficiency
-        const BUDGET_THRESHOLD = 2000;      // Start throttling at this count
-        const CLEANUP_INTERVAL = 1000;      // Memory cleanup every 1s
+    window.addEventListener('resize', () => {
+        W = canvas.width = window.innerWidth;
+        H = canvas.height = window.innerHeight;
+    });
 
-        // Canvas setup with double buffering
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d', { alpha: false });
-        const bloomCanvas = document.getElementById('bloomCanvas');
-        const bloomCtx = bloomCanvas.getContext('2d');
+    // Performance limits
+    const MAX_PARTICLES = 1500;
 
-        // Initialize dimensions FIRST
-        let W = window.innerWidth;
-        let H = window.innerHeight;
+    // State
+    let particles = [];
+    let pattern = 'peony';
+    let autoMode = true;
+    let lastTime = 0;
+    let frameCount = 0;
+    let fps = 60;
+    let fpsTime = 0;
 
-        function resize() {
-            W = window.innerWidth;
-            H = window.innerHeight;
-            canvas.width = W;
-            canvas.height = H;
-            bloomCanvas.width = W;
-            bloomCanvas.height = H;
+    // Simple particle class
+    class Particle {
+        constructor(x, y, vx, vy, color, life, size, type) {
+            this.x = x;
+            this.y = y;
+            this.vx = vx;
+            this.vy = vy;
+            this.color = color;
+            this.life = life;
+            this.maxLife = life;
+            this.size = size;
+            this.type = type || 'spark';
         }
-        resize();
-        window.addEventListener('resize', resize);
 
-        // Performance tracking
-        let lastTime = 0;
-        let frameCount = 0;
-        let fps = 60;
-        let fpsUpdateTime = 0;
-        let lastCleanupTime = 0;
+        update(dt) {
+            this.vy += 0.15 * dt; // gravity
+            this.vx *= 0.99;
+            this.vy *= 0.99;
+            this.x += this.vx * dt;
+            this.y += this.vy * dt;
+            this.life -= dt * 0.02;
+        }
 
-        // State
-        let paused = false;
-        let interactionMode = 'emit';
-        let particleType = 'spark';
-        let emitterShape = 'point';
-        let mousePos = { x: W / 2, y: H / 2 };
-        let isMouseDown = false;
-        let autoShow = false;
-        let audioEnabled = false;
-        let audioAnalyser = null;
-        let audioData = null;
-        let presetIntervals = [];
-        let rocketIntervals = [];  // Track rocket trail intervals for cleanup
+        draw() {
+            const alpha = Math.max(0, this.life / this.maxLife);
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size * alpha, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
-        // Physics settings
-        let physics = {
-            gravity: 0.1,
-            wind: 0,
-            turbulence: 0,
-            friction: 0.99
-        };
+        get dead() {
+            return this.life <= 0 || this.y > H + 50;
+        }
+    }
 
-        // Appearance settings
-        let appearance = {
-            size: 5,
-            trailLength: 0.1,
-            bloomIntensity: 0.5,
-            colors: ['#ff6b6b', '#ffd93d', '#4ecdc4']
-        };
+    // Rocket class
+    class Rocket {
+        constructor(x, targetY, pattern) {
+            this.x = x;
+            this.y = H;
+            this.targetY = targetY;
+            this.vy = -12 - Math.random() * 4;
+            this.pattern = pattern;
+            this.hue = Math.random() * 360;
+        }
 
-        // ============================================
-        // HIGH-PERFORMANCE PARTICLE POOL
-        // Object pooling with proper recycling
-        // ============================================
+        update(dt) {
+            this.y += this.vy * dt;
+            this.vy += 0.15 * dt;
 
-        // Use a Set for O(1) active particle tracking
-        const particlePool = [];
-        const activeParticles = [];
-        const freeList = [];  // Free particle indices for O(1) allocation
-
-        // Particle structure (optimized flat object)
-        class Particle {
-            constructor(index) {
-                this.poolIndex = index;
-                this.x = 0;
-                this.y = 0;
-                this.vx = 0;
-                this.vy = 0;
-                this.ax = 0;
-                this.ay = 0;
-                this.life = 1;
-                this.maxLife = 1;
-                this.size = 5;
-                this.baseSize = 5;
-                this.r = 255;
-                this.g = 255;
-                this.b = 255;
-                this.type = 'spark';
-                this.rotation = 0;
-                this.rotationSpeed = 0;
-                this.trailX = new Float32Array(20);
-                this.trailY = new Float32Array(20);
-                this.trailIdx = 0;
-                this.trailLen = 0;
-                this.maxTrail = 10;
-                this.alpha = 1;
-                this.hue = 0;
-                this.active = false;
-                this.glow = true;
-                this.sparkle = 0;
-                this.wobble = 0;
-                this.wobbleSpeed = 0;
-                // For secondary explosions
-                this.willExplode = false;
-                this.explodePattern = null;
-                // For rockets
-                this.isRocket = false;
-                this.pattern = null;
-                this.explodeY = 0;
-                this.rocketIntervalId = null;  // Track associated interval
+            // Trail
+            if (particles.length < MAX_PARTICLES && Math.random() < 0.5) {
+                particles.push(new Particle(
+                    this.x + (Math.random() - 0.5) * 4,
+                    this.y,
+                    (Math.random() - 0.5) * 2,
+                    2 + Math.random() * 2,
+                    `hsl(${this.hue}, 100%, 70%)`,
+                    0.5,
+                    2,
+                    'trail'
+                ));
             }
+        }
 
-            reset() {
-                this.x = 0;
-                this.y = 0;
-                this.vx = 0;
-                this.vy = 0;
-                this.ax = 0;
-                this.ay = 0;
-                this.life = 1;
-                this.maxLife = 1;
-                this.size = 5;
-                this.baseSize = 5;
-                this.type = 'spark';
-                this.rotation = 0;
-                this.rotationSpeed = 0;
-                this.trailIdx = 0;
-                this.trailLen = 0;
-                this.maxTrail = 10;
-                this.alpha = 1;
-                this.hue = 0;
-                this.active = false;
-                this.glow = true;
-                this.sparkle = 0;
-                this.wobble = 0;
-                this.wobbleSpeed = 0;
-                this.willExplode = false;
-                this.explodePattern = null;
-                this.isRocket = false;
-                this.pattern = null;
-                this.explodeY = 0;
-                // Clean up any associated interval
-                if (this.rocketIntervalId !== null) {
-                    clearInterval(this.rocketIntervalId);
-                    this.rocketIntervalId = null;
+        draw() {
+            ctx.fillStyle = `hsl(${this.hue}, 100%, 80%)`;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        get shouldExplode() {
+            return this.y <= this.targetY || this.vy >= 0;
+        }
+    }
+
+    let rockets = [];
+
+    // Explosion patterns
+    function explode(x, y, hue, pattern) {
+        const budget = MAX_PARTICLES - particles.length;
+        if (budget <= 0) return;
+
+        const count = Math.min(budget, getPatternCount(pattern));
+
+        switch (pattern) {
+            case 'peony':
+                for (let i = 0; i < count; i++) {
+                    const angle = (Math.PI * 2 / count) * i;
+                    const speed = 4 + Math.random() * 4;
+                    particles.push(new Particle(
+                        x, y,
+                        Math.cos(angle) * speed,
+                        Math.sin(angle) * speed,
+                        `hsl(${hue + Math.random() * 30}, 100%, ${60 + Math.random() * 20}%)`,
+                        1 + Math.random() * 0.5,
+                        3 + Math.random() * 2,
+                        'spark'
+                    ));
                 }
-            }
+                break;
 
-            init(x, y, vx, vy, options = {}) {
-                this.x = x;
-                this.y = y;
-                this.vx = vx;
-                this.vy = vy;
-                this.life = options.life || 1;
-                this.maxLife = this.life;
-                this.baseSize = options.size || appearance.size;
-                this.size = this.baseSize;
-                this.type = options.type || particleType;
-                this.rotation = Math.random() * Math.PI * 2;
-                this.rotationSpeed = (Math.random() - 0.5) * 0.2;
-                this.trailIdx = 0;
-                this.trailLen = 0;
-                this.maxTrail = options.trailLength !== undefined ? options.trailLength : Math.floor(appearance.trailLength * 20);
-                this.alpha = 1;
-                this.hue = options.hue !== undefined ? options.hue : Math.random() * 360;
-                this.active = true;
-                this.glow = options.glow !== undefined ? options.glow : true;
-                this.sparkle = options.sparkle || 0;
-                this.wobble = Math.random() * Math.PI * 2;
-                this.wobbleSpeed = Math.random() * 0.1;
-                this.willExplode = options.willExplode || false;
-                this.explodePattern = options.explodePattern || null;
-                this.isRocket = false;
-                this.pattern = null;
-                this.explodeY = 0;
-                this.rocketIntervalId = null;
-
-                // Parse color
-                const color = options.color || appearance.colors[Math.floor(Math.random() * appearance.colors.length)];
-                if (typeof color === 'string' && color.startsWith('#')) {
-                    this.r = parseInt(color.substr(1, 2), 16);
-                    this.g = parseInt(color.substr(3, 2), 16);
-                    this.b = parseInt(color.substr(5, 2), 16);
-                } else if (options.r !== undefined) {
-                    this.r = options.r;
-                    this.g = options.g;
-                    this.b = options.b;
+            case 'chrysanthemum':
+                for (let i = 0; i < count; i++) {
+                    const angle = (Math.PI * 2 / count) * i + Math.random() * 0.2;
+                    const speed = 2 + Math.random() * 6;
+                    particles.push(new Particle(
+                        x, y,
+                        Math.cos(angle) * speed,
+                        Math.sin(angle) * speed,
+                        `hsl(${hue}, 100%, 70%)`,
+                        1.5 + Math.random() * 0.5,
+                        2 + Math.random(),
+                        'spark'
+                    ));
                 }
+                break;
 
-                return this;
-            }
-
-            update(dt) {
-                if (!this.active) return;
-
-                // Store trail position
-                if (this.maxTrail > 0) {
-                    this.trailX[this.trailIdx] = this.x;
-                    this.trailY[this.trailIdx] = this.y;
-                    this.trailIdx = (this.trailIdx + 1) % 20;
-                    if (this.trailLen < this.maxTrail) this.trailLen++;
+            case 'willow':
+                for (let i = 0; i < count; i++) {
+                    const angle = (Math.PI * 2 / count) * i;
+                    const speed = 3 + Math.random() * 2;
+                    particles.push(new Particle(
+                        x, y,
+                        Math.cos(angle) * speed,
+                        Math.sin(angle) * speed - 1,
+                        `hsl(45, 100%, 70%)`,
+                        2 + Math.random(),
+                        2,
+                        'willow'
+                    ));
                 }
+                break;
 
-                // Apply type-specific physics
-                switch (this.type) {
-                    case 'spark':
-                        this.ay = physics.gravity;
-                        this.ax = physics.wind;
-                        break;
-                    case 'smoke':
-                        this.ay = -0.02;
-                        this.ax = physics.wind + (Math.random() - 0.5) * 0.1;
-                        this.size *= 1.008;
-                        break;
-                    case 'fire':
-                        this.ay = -0.12;
-                        this.ax = (Math.random() - 0.5) * 0.2;
-                        this.hue = 30 + (1 - this.life / this.maxLife) * 30;
-                        break;
-                    case 'water':
-                        this.ay = physics.gravity * 1.5;
-                        this.ax = physics.wind * 0.5;
-                        break;
-                    case 'snow':
-                        this.ay = 0.02;
-                        this.wobble += this.wobbleSpeed;
-                        this.ax = Math.sin(this.wobble) * 0.05 + physics.wind;
-                        this.rotation += this.rotationSpeed;
-                        break;
-                    case 'confetti':
-                        this.ay = physics.gravity * 0.5;
-                        this.ax = Math.sin(this.rotation * 3) * 0.08 + physics.wind;
-                        this.rotation += this.rotationSpeed;
-                        break;
-                    case 'magic':
-                        this.ay = Math.sin(this.x * 0.01 + this.wobble) * 0.03;
-                        this.ax = Math.cos(this.y * 0.01 + this.wobble) * 0.03;
-                        this.hue += 2;
-                        this.wobble += 0.05;
-                        this.sparkle = Math.random();
-                        break;
+            case 'ring':
+                for (let i = 0; i < count; i++) {
+                    const angle = (Math.PI * 2 / count) * i;
+                    const speed = 5;
+                    particles.push(new Particle(
+                        x, y,
+                        Math.cos(angle) * speed,
+                        Math.sin(angle) * speed,
+                        `hsl(${hue}, 100%, 60%)`,
+                        1,
+                        3,
+                        'spark'
+                    ));
                 }
+                break;
 
-                // Turbulence
-                if (physics.turbulence > 0) {
-                    this.ax += (Math.random() - 0.5) * physics.turbulence * 2;
-                    this.ay += (Math.random() - 0.5) * physics.turbulence * 2;
+            case 'heart':
+                for (let i = 0; i < count; i++) {
+                    const t = (i / count) * Math.PI * 2;
+                    const hx = 16 * Math.pow(Math.sin(t), 3);
+                    const hy = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
+                    particles.push(new Particle(
+                        x, y,
+                        hx * 0.3,
+                        hy * 0.3,
+                        `hsl(350, 100%, 60%)`,
+                        1.2,
+                        3,
+                        'spark'
+                    ));
                 }
+                break;
 
-                // Update velocity
-                this.vx += this.ax;
-                this.vy += this.ay;
-
-                // Apply friction
-                this.vx *= physics.friction;
-                this.vy *= physics.friction;
-
-                // Update position
-                this.x += this.vx * dt;
-                this.y += this.vy * dt;
-
-                // Update life
-                this.life -= 0.016 * dt;
-                this.alpha = Math.max(0, this.life / this.maxLife);
-
-                // Size over lifetime based on type
-                switch (this.type) {
-                    case 'spark':
-                        this.size = this.baseSize * this.alpha;
-                        break;
-                    case 'fire':
-                        this.size = this.baseSize * (0.5 + this.alpha * 0.5);
-                        break;
-                    case 'magic':
-                        this.size = this.baseSize * (0.5 + Math.sin(this.wobble * 5) * 0.3 + this.alpha * 0.5);
-                        break;
+            case 'star':
+                for (let i = 0; i < count; i++) {
+                    const angle = (Math.PI * 2 / 5) * (i % 5);
+                    const radius = (i % 2 === 0) ? 6 : 3;
+                    particles.push(new Particle(
+                        x, y,
+                        Math.cos(angle - Math.PI/2) * radius,
+                        Math.sin(angle - Math.PI/2) * radius,
+                        `hsl(${hue}, 100%, 70%)`,
+                        1,
+                        3,
+                        'spark'
+                    ));
                 }
+                break;
+        }
+    }
 
-                // Check for secondary explosion (with budget check)
-                if (this.willExplode && this.life <= 0.3 && this.life > 0.25) {
-                    if (canCreateParticles(8)) {  // Budget check for secondary explosions
-                        createSecondaryExplosion(this.x, this.y, this.explodePattern);
-                    }
-                    this.willExplode = false;
-                }
+    function getPatternCount(pattern) {
+        switch (pattern) {
+            case 'peony': return 80;
+            case 'chrysanthemum': return 120;
+            case 'willow': return 60;
+            case 'ring': return 50;
+            case 'heart': return 60;
+            case 'star': return 50;
+            default: return 60;
+        }
+    }
 
-                // Deactivate if dead or out of bounds
-                if (this.life <= 0 || this.x < -100 || this.x > W + 100 || this.y > H + 100) {
-                    this.active = false;
-                }
+    function launch(x, targetY) {
+        if (rockets.length < 10) {
+            rockets.push(new Rocket(x || W/2 + (Math.random() - 0.5) * W * 0.6, targetY || H * 0.2 + Math.random() * H * 0.3, pattern));
+        }
+    }
 
-                // Reset acceleration
-                this.ax = 0;
-                this.ay = 0;
-            }
+    function update(timestamp) {
+        if (!lastTime) lastTime = timestamp;
+        const dt = Math.min((timestamp - lastTime) / 16.67, 3);
+        lastTime = timestamp;
 
-            draw(ctx) {
-                if (!this.active || this.alpha <= 0) return;
-
-                const a = this.alpha;
-
-                // Draw trail
-                if (this.trailLen > 1) {
-                    ctx.beginPath();
-                    let idx = (this.trailIdx - this.trailLen + 20) % 20;
-                    ctx.moveTo(this.trailX[idx], this.trailY[idx]);
-                    for (let i = 1; i < this.trailLen; i++) {
-                        idx = (idx + 1) % 20;
-                        ctx.lineTo(this.trailX[idx], this.trailY[idx]);
-                    }
-                    ctx.lineTo(this.x, this.y);
-                    ctx.strokeStyle = this.getColorString(a * 0.4);
-                    ctx.lineWidth = Math.max(1, this.size * 0.5);
-                    ctx.lineCap = 'round';
-                    ctx.stroke();
-                }
-
-                ctx.save();
-                ctx.translate(this.x, this.y);
-                ctx.rotate(this.rotation);
-                ctx.globalAlpha = a;
-
-                switch (this.type) {
-                    case 'spark':
-                        this.drawSpark(ctx);
-                        break;
-                    case 'smoke':
-                        this.drawSmoke(ctx);
-                        break;
-                    case 'fire':
-                        this.drawFire(ctx);
-                        break;
-                    case 'water':
-                        this.drawWater(ctx);
-                        break;
-                    case 'snow':
-                        this.drawSnow(ctx);
-                        break;
-                    case 'confetti':
-                        this.drawConfetti(ctx);
-                        break;
-                    case 'magic':
-                        this.drawMagic(ctx);
-                        break;
-                    default:
-                        this.drawCircle(ctx);
-                }
-
-                ctx.restore();
-            }
-
-            getColorString(alpha) {
-                if (this.type === 'fire') {
-                    const l = 50 + (1 - alpha) * 40;
-                    return `hsla(${this.hue}, 100%, ${l}%, ${alpha})`;
-                }
-                if (this.type === 'magic') {
-                    return `hsla(${this.hue % 360}, 100%, 65%, ${alpha})`;
-                }
-                return `rgba(${this.r}, ${this.g}, ${this.b}, ${alpha})`;
-            }
-
-            drawCircle(ctx) {
-                ctx.beginPath();
-                ctx.arc(0, 0, this.size, 0, Math.PI * 2);
-                ctx.fillStyle = this.getColorString(this.alpha);
-                ctx.fill();
-            }
-
-            drawSpark(ctx) {
-                if (this.glow) {
-                    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size * 2);
-                    const c = this.getColorString(this.alpha);
-                    gradient.addColorStop(0, c);
-                    gradient.addColorStop(0.4, this.getColorString(this.alpha * 0.5));
-                    gradient.addColorStop(1, 'transparent');
-                    ctx.fillStyle = gradient;
-                    ctx.beginPath();
-                    ctx.arc(0, 0, this.size * 2, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-                ctx.beginPath();
-                ctx.arc(0, 0, this.size, 0, Math.PI * 2);
-                ctx.fillStyle = this.getColorString(this.alpha);
-                ctx.fill();
-
-                // Hot center
-                ctx.beginPath();
-                ctx.arc(0, 0, this.size * 0.4, 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(255, 255, 255, ${this.alpha * 0.8})`;
-                ctx.fill();
-            }
-
-            drawSmoke(ctx) {
-                const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size);
-                gradient.addColorStop(0, `rgba(100, 100, 100, ${this.alpha * 0.3})`);
-                gradient.addColorStop(0.5, `rgba(80, 80, 80, ${this.alpha * 0.15})`);
-                gradient.addColorStop(1, 'transparent');
-                ctx.fillStyle = gradient;
-                ctx.beginPath();
-                ctx.arc(0, 0, this.size, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            drawFire(ctx) {
-                const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size * 1.5);
-                gradient.addColorStop(0, `hsla(${this.hue - 10}, 100%, 95%, ${this.alpha})`);
-                gradient.addColorStop(0.3, `hsla(${this.hue}, 100%, 60%, ${this.alpha})`);
-                gradient.addColorStop(0.7, `hsla(${this.hue + 10}, 100%, 40%, ${this.alpha * 0.5})`);
-                gradient.addColorStop(1, 'transparent');
-                ctx.fillStyle = gradient;
-                ctx.beginPath();
-                ctx.arc(0, 0, this.size * 1.5, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            drawWater(ctx) {
-                ctx.beginPath();
-                ctx.ellipse(0, 0, this.size * 0.5, this.size, 0, 0, Math.PI * 2);
-                const gradient = ctx.createLinearGradient(0, -this.size, 0, this.size);
-                gradient.addColorStop(0, `rgba(${this.r}, ${this.g}, ${this.b}, ${this.alpha * 0.9})`);
-                gradient.addColorStop(0.5, `rgba(${Math.min(255, this.r + 50)}, ${Math.min(255, this.g + 50)}, ${Math.min(255, this.b + 50)}, ${this.alpha})`);
-                gradient.addColorStop(1, `rgba(${this.r}, ${this.g}, ${this.b}, ${this.alpha * 0.7})`);
-                ctx.fillStyle = gradient;
-                ctx.fill();
-            }
-
-            drawSnow(ctx) {
-                ctx.fillStyle = `rgba(255, 255, 255, ${this.alpha})`;
-                ctx.strokeStyle = `rgba(255, 255, 255, ${this.alpha * 0.5})`;
-                ctx.lineWidth = this.size * 0.2;
-
-                for (let i = 0; i < 6; i++) {
-                    ctx.save();
-                    ctx.rotate((Math.PI / 3) * i);
-                    ctx.beginPath();
-                    ctx.moveTo(0, 0);
-                    ctx.lineTo(0, -this.size);
-                    ctx.stroke();
-                    // Crystal branches
-                    ctx.beginPath();
-                    ctx.moveTo(0, -this.size * 0.5);
-                    ctx.lineTo(this.size * 0.3, -this.size * 0.7);
-                    ctx.moveTo(0, -this.size * 0.5);
-                    ctx.lineTo(-this.size * 0.3, -this.size * 0.7);
-                    ctx.stroke();
-                    ctx.restore();
-                }
-
-                ctx.beginPath();
-                ctx.arc(0, 0, this.size * 0.2, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            drawConfetti(ctx) {
-                ctx.fillStyle = this.getColorString(this.alpha);
-                // Perspective effect
-                const scaleY = Math.cos(this.rotation * 2) * 0.5 + 0.5;
-                ctx.scale(1, scaleY + 0.1);
-                ctx.fillRect(-this.size, -this.size * 0.4, this.size * 2, this.size * 0.8);
-            }
-
-            drawMagic(ctx) {
-                // Outer glow
-                const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size * 3);
-                gradient.addColorStop(0, `hsla(${this.hue % 360}, 100%, 70%, ${this.alpha})`);
-                gradient.addColorStop(0.3, `hsla(${this.hue % 360}, 100%, 50%, ${this.alpha * 0.5})`);
-                gradient.addColorStop(1, 'transparent');
-                ctx.fillStyle = gradient;
-                ctx.beginPath();
-                ctx.arc(0, 0, this.size * 3, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Core sparkle
-                ctx.fillStyle = `rgba(255, 255, 255, ${this.alpha * (0.5 + this.sparkle * 0.5)})`;
-                ctx.beginPath();
-                // Draw star shape
-                for (let i = 0; i < 4; i++) {
-                    const angle = (Math.PI / 2) * i;
-                    ctx.save();
-                    ctx.rotate(angle + this.rotation);
-                    ctx.moveTo(0, 0);
-                    ctx.lineTo(this.size * 0.2, -this.size * 0.5);
-                    ctx.lineTo(0, -this.size);
-                    ctx.lineTo(-this.size * 0.2, -this.size * 0.5);
-                    ctx.restore();
-                }
-                ctx.fill();
-
-                // Center dot
-                ctx.beginPath();
-                ctx.arc(0, 0, this.size * 0.3, 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(255, 255, 255, ${this.alpha})`;
-                ctx.fill();
+        // Update rockets
+        for (let i = rockets.length - 1; i >= 0; i--) {
+            const r = rockets[i];
+            r.update(dt);
+            if (r.shouldExplode) {
+                explode(r.x, r.y, r.hue, r.pattern);
+                rockets.splice(i, 1);
             }
         }
 
-        // Initialize particle pool
-        for (let i = 0; i < POOL_SIZE; i++) {
-            particlePool[i] = new Particle(i);
-            freeList.push(i);
-        }
-
-        // === BUDGET MANAGEMENT ===
-        function canCreateParticles(count) {
-            return activeParticles.length + count <= MAX_ACTIVE_PARTICLES;
-        }
-
-        function getAvailableBudget() {
-            return Math.max(0, MAX_ACTIVE_PARTICLES - activeParticles.length);
-        }
-
-        function isThrottled() {
-            return activeParticles.length >= BUDGET_THRESHOLD;
-        }
-
-        // Get particle from pool (optimized with free list)
-        function getParticle() {
-            // Check hard cap first
-            if (activeParticles.length >= MAX_ACTIVE_PARTICLES) {
-                return null;
-            }
-
-            // Try to get from free list
-            if (freeList.length > 0) {
-                const idx = freeList.pop();
-                const p = particlePool[idx];
-                p.reset();
-                return p;
-            }
-
-            // Pool exhausted - cannot create more
-            return null;
-        }
-
-        // Return particle to pool
-        function returnParticle(particle) {
-            if (particle && particle.poolIndex !== undefined) {
-                particle.reset();
-                particle.active = false;
-                freeList.push(particle.poolIndex);
+        // Update particles - swap and pop for O(1) removal
+        for (let i = particles.length - 1; i >= 0; i--) {
+            particles[i].update(dt);
+            if (particles[i].dead) {
+                // Swap with last and pop
+                particles[i] = particles[particles.length - 1];
+                particles.pop();
             }
         }
 
-        // Emit particles with budget checking
-        function emit(x, y, count = 1, options = {}) {
-            // Apply budget limiting
-            const available = getAvailableBudget();
-            const actualCount = Math.min(count, available);
-
-            if (actualCount <= 0) return;
-
-            for (let i = 0; i < actualCount; i++) {
-                const p = getParticle();
-                if (!p) break;  // Pool exhausted
-
-                let px = x, py = y;
-
-                // Emitter shapes
-                switch (emitterShape) {
-                    case 'line':
-                        px = x + (Math.random() - 0.5) * 200;
-                        break;
-                    case 'circle':
-                        const angle = Math.random() * Math.PI * 2;
-                        const radius = Math.random() * 50;
-                        px = x + Math.cos(angle) * radius;
-                        py = y + Math.sin(angle) * radius;
-                        break;
-                    case 'rectangle':
-                        px = x + (Math.random() - 0.5) * 150;
-                        py = y + (Math.random() - 0.5) * 100;
-                        break;
-                }
-
-                const speed = options.speed !== undefined ? options.speed : 3;
-                const spread = options.spread !== undefined ? options.spread : Math.PI * 2;
-                const baseAngle = options.angle !== undefined ? options.angle : -Math.PI / 2;
-                const emitAngle = baseAngle + (Math.random() - 0.5) * spread;
-
-                const speedVar = options.speedVar !== undefined ? options.speedVar : 0.5;
-                const finalSpeed = speed * (1 - speedVar + Math.random() * speedVar * 2);
-
-                const vx = Math.cos(emitAngle) * finalSpeed;
-                const vy = Math.sin(emitAngle) * finalSpeed;
-
-                p.init(px, py, vx, vy, options);
-                activeParticles.push(p);
-            }
+        // Auto launch
+        if (autoMode && rockets.length < 3 && Math.random() < 0.03) {
+            launch();
         }
 
-        // ============================================
-        // SPECTACULAR FIREWORK PATTERNS
-        // With budget-aware particle counts
-        // ============================================
-
-        function launchFirework(pattern, x, y) {
-            // Check if we have budget for a firework
-            if (!canCreateParticles(50)) return;  // Reserve at least 50 for explosion
-
-            const fx = x !== undefined ? x : Math.random() * W * 0.8 + W * 0.1;
-            const fy = y !== undefined ? y : H;
-            const targetY = H * (0.15 + Math.random() * 0.35);
-
-            // Launch rocket
-            const rocket = getParticle();
-            if (rocket) {
-                rocket.init(fx, fy, (Math.random() - 0.5) * 1, -14 - Math.random() * 4, {
-                    type: 'spark',
-                    size: 4,
-                    life: 3,
-                    color: '#fff',
-                    glow: true,
-                    trailLength: 12
-                });
-                rocket.isRocket = true;
-                rocket.pattern = pattern;
-                rocket.explodeY = targetY;
-                activeParticles.push(rocket);
-
-                // Rocket trail sparks with proper cleanup
-                const rocketRef = rocket;
-                const sparkInterval = setInterval(() => {
-                    if (!rocketRef.active || rocketRef.y <= rocketRef.explodeY) {
-                        clearInterval(sparkInterval);
-                        // Remove from tracking
-                        const idx = rocketIntervals.indexOf(sparkInterval);
-                        if (idx > -1) rocketIntervals.splice(idx, 1);
-                        return;
-                    }
-                    // Only emit if budget allows
-                    if (canCreateParticles(2)) {
-                        emit(rocketRef.x, rocketRef.y, 2, {
-                            type: 'spark',
-                            size: 2,
-                            life: 0.3,
-                            speed: 1,
-                            spread: Math.PI * 0.5,
-                            angle: Math.PI / 2,
-                            color: '#ffa500',
-                            glow: true,
-                            trailLength: 3
-                        });
-                    }
-                }, 30);
-                rocket.rocketIntervalId = sparkInterval;
-                rocketIntervals.push(sparkInterval);
-            }
+        // FPS calc
+        frameCount++;
+        if (timestamp - fpsTime > 500) {
+            fps = Math.round(frameCount * 2);
+            frameCount = 0;
+            fpsTime = timestamp;
         }
 
-        function explodeFirework(x, y, pattern) {
-            const colors = appearance.colors;
-            const color = colors[Math.floor(Math.random() * colors.length)];
-
-            // Dynamic particle count based on available budget
-            const budget = getAvailableBudget();
-            const baseCount = Math.min(120, Math.floor(budget * 0.6));  // Use at most 60% of budget
-
-            if (baseCount < 20) return;  // Not enough budget for a good explosion
-
-            switch (pattern) {
-                case 'peony':
-                    // Classic spherical burst
-                    for (let i = 0; i < baseCount; i++) {
-                        const angle = (Math.PI * 2 / baseCount) * i;
-                        const speed = 5 + Math.random() * 3;
-                        emit(x, y, 1, {
-                            type: 'spark',
-                            size: 3 + Math.random() * 2,
-                            life: 1.8 + Math.random() * 0.5,
-                            color: color,
-                            speed: speed,
-                            angle: angle,
-                            spread: 0.1,
-                            speedVar: 0.2,
-                            trailLength: 10,
-                            glow: true
-                        });
-                    }
-                    break;
-
-                case 'chrysanthemum':
-                    // Dense with long trails
-                    const chrysCount = Math.min(baseCount * 1.5, budget);
-                    for (let i = 0; i < chrysCount; i++) {
-                        const angle = (Math.PI * 2 / baseCount) * i;
-                        const speed = 2 + Math.random() * 5;
-                        emit(x, y, 1, {
-                            type: 'spark',
-                            size: 2 + Math.random(),
-                            life: 2.5 + Math.random(),
-                            color: color,
-                            speed: speed,
-                            angle: angle,
-                            spread: 0.05,
-                            speedVar: 0.3,
-                            trailLength: 18
-                        });
-                    }
-                    break;
-
-                case 'willow':
-                    // Long falling trails like willow branches
-                    for (let i = 0; i < baseCount; i++) {
-                        const angle = (Math.PI * 2 / baseCount) * i;
-                        emit(x, y, 1, {
-                            type: 'spark',
-                            size: 2.5,
-                            life: 4 + Math.random(),
-                            color: '#ffd700',
-                            speed: 3 + Math.random() * 2,
-                            angle: angle,
-                            spread: 0.1,
-                            trailLength: 20
-                        });
-                    }
-                    break;
-
-                case 'palm':
-                    // Rising then falling like palm fronds
-                    const palmArms = Math.min(12, Math.floor(baseCount / 15));
-                    for (let i = 0; i < palmArms; i++) {
-                        const baseAngle = (Math.PI * 2 / palmArms) * i;
-                        for (let j = 0; j < 15; j++) {
-                            const angle = baseAngle + (Math.random() - 0.5) * 0.25;
-                            const speed = 3 + j * 0.35;
-                            emit(x, y, 1, {
-                                type: 'spark',
-                                size: 3.5 - j * 0.12,
-                                life: 2.5 + Math.random(),
-                                color: color,
-                                speed: speed,
-                                angle: angle,
-                                spread: 0.03,
-                                trailLength: 12
-                            });
-                        }
-                    }
-                    break;
-
-                case 'ring':
-                    // Perfect circle
-                    for (let i = 0; i < baseCount; i++) {
-                        const angle = (Math.PI * 2 / baseCount) * i;
-                        emit(x, y, 1, {
-                            type: 'spark',
-                            size: 4,
-                            life: 1.5,
-                            color: color,
-                            speed: 6,
-                            angle: angle,
-                            spread: 0,
-                            trailLength: 8
-                        });
-                    }
-                    // Inner ring (delayed, with budget check)
-                    setTimeout(() => {
-                        if (canCreateParticles(baseCount / 2)) {
-                            for (let i = 0; i < baseCount / 2; i++) {
-                                const angle = (Math.PI * 2 / (baseCount / 2)) * i;
-                                emit(x, y, 1, {
-                                    type: 'spark',
-                                    size: 3,
-                                    life: 1.2,
-                                    color: colors[(colors.indexOf(color) + 1) % colors.length],
-                                    speed: 4,
-                                    angle: angle,
-                                    spread: 0,
-                                    trailLength: 6
-                                });
-                            }
-                        }
-                    }, 100);
-                    break;
-
-                case 'heart':
-                    // Heart shape
-                    const heartSteps = Math.min(80, baseCount);
-                    for (let i = 0; i < heartSteps; i++) {
-                        const t = (i / heartSteps) * Math.PI * 2;
-                        const hx = 16 * Math.pow(Math.sin(t), 3);
-                        const hy = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
-                        const angle = Math.atan2(hy, hx);
-                        const dist = Math.sqrt(hx*hx + hy*hy) / 3.5;
-                        emit(x, y, 1, {
-                            type: 'spark',
-                            size: 4,
-                            life: 2,
-                            color: '#ff3366',
-                            speed: dist,
-                            angle: angle,
-                            spread: 0,
-                            trailLength: 10
-                        });
-                    }
-                    break;
-
-                case 'star':
-                    // Five-pointed star
-                    const starPoints = 5;
-                    const perPoint = Math.floor(baseCount / starPoints);
-                    for (let i = 0; i < starPoints; i++) {
-                        const baseAngle = (Math.PI * 2 / starPoints) * i - Math.PI / 2;
-                        for (let j = 0; j < perPoint; j++) {
-                            emit(x, y, 1, {
-                                type: 'spark',
-                                size: 3.5,
-                                life: 1.8,
-                                color: color,
-                                speed: 2 + j * 0.35,
-                                angle: baseAngle,
-                                spread: 0.08,
-                                trailLength: 10
-                            });
-                        }
-                    }
-                    break;
-
-                case 'spiral':
-                    // Rotating spiral
-                    const spiralCount = Math.min(baseCount * 1.5, budget);
-                    for (let i = 0; i < spiralCount; i++) {
-                        const angle = (i / baseCount) * Math.PI * 10;
-                        const speed = 1 + (i / baseCount) * 6;
-                        emit(x, y, 1, {
-                            type: 'magic',
-                            size: 3,
-                            life: 2.5,
-                            hue: (i / baseCount) * 360,
-                            speed: speed,
-                            angle: angle,
-                            spread: 0,
-                            trailLength: 15
-                        });
-                    }
-                    break;
-
-                case 'crossette':
-                    // Explodes into secondary explosions (limited count)
-                    const crossetteCount = Math.min(20, Math.floor(baseCount / 3));
-                    for (let i = 0; i < crossetteCount; i++) {
-                        const angle = (Math.PI * 2 / crossetteCount) * i;
-                        const speed = 5 + Math.random() * 2;
-                        emit(x, y, 1, {
-                            type: 'spark',
-                            size: 4,
-                            life: 1,
-                            color: color,
-                            speed: speed,
-                            angle: angle,
-                            spread: 0.1,
-                            trailLength: 8,
-                            willExplode: true,
-                            explodePattern: 'mini'
-                        });
-                    }
-                    break;
-
-                case 'kamuro':
-                    // Dense golden waterfall (reduced count)
-                    const kamuroCount = Math.min(baseCount * 2, budget);
-                    for (let i = 0; i < kamuroCount; i++) {
-                        const angle = (Math.PI * 2 / baseCount) * (i % baseCount);
-                        const speed = 1 + Math.random() * 3;
-                        emit(x, y, 1, {
-                            type: 'spark',
-                            size: 2,
-                            life: 4 + Math.random() * 2,
-                            color: '#ffcc00',
-                            speed: speed,
-                            angle: angle,
-                            spread: 0.2,
-                            trailLength: 20
-                        });
-                    }
-                    break;
-            }
-
-            // Screen flash
-            flashScreen(color);
-
-            // Crackle effect for some patterns (with budget check)
-            if (['peony', 'chrysanthemum', 'crossette'].includes(pattern)) {
-                setTimeout(() => {
-                    if (canCreateParticles(20)) {
-                        for (let i = 0; i < 20; i++) {
-                            emit(x + (Math.random() - 0.5) * 100, y + (Math.random() - 0.5) * 100, 1, {
-                                type: 'spark',
-                                size: 2,
-                                life: 0.3,
-                                color: '#fff',
-                                speed: 2,
-                                spread: Math.PI * 2,
-                                trailLength: 2
-                            });
-                        }
-                    }
-                }, 300);
-            }
-        }
-
-        function createSecondaryExplosion(x, y, pattern) {
-            if (pattern === 'mini' && canCreateParticles(8)) {
-                for (let i = 0; i < 8; i++) {
-                    const angle = (Math.PI * 2 / 8) * i;
-                    emit(x, y, 1, {
-                        type: 'spark',
-                        size: 2,
-                        life: 0.8,
-                        color: appearance.colors[Math.floor(Math.random() * appearance.colors.length)],
-                        speed: 3,
-                        angle: angle,
-                        spread: 0.1,
-                        trailLength: 5
-                    });
-                }
-            }
-        }
-
-        function flashScreen(color) {
-            const flash = document.createElement('div');
-            flash.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: ${color};
-                opacity: 0.15;
-                pointer-events: none;
-                z-index: 1000;
-                animation: flashFade 0.3s ease-out forwards;
-            `;
-            document.body.appendChild(flash);
-            setTimeout(() => flash.remove(), 300);
-        }
-
-        // ============================================
-        // PRESETS - Spectacular Effects
-        // ============================================
-
-        function clearPresetIntervals() {
-            presetIntervals.forEach(id => clearInterval(id));
-            presetIntervals = [];
-        }
-
-        function clearRocketIntervals() {
-            rocketIntervals.forEach(id => clearInterval(id));
-            rocketIntervals = [];
-        }
-
-        const presets = {
-            fireworks: () => {
-                physics.gravity = 0.1;
-                physics.wind = 0;
-                physics.turbulence = 0;
-                physics.friction = 0.99;
-                appearance.trailLength = 0.3;
-                appearance.bloomIntensity = 0.7;
-                appearance.colors = ['#ff6b6b', '#ffd93d', '#4ecdc4', '#a855f7', '#3b82f6'];
-                particleType = 'spark';
-                autoShow = true;
-            },
-
-            campfire: () => {
-                physics.gravity = -0.03;
-                physics.wind = 0;
-                physics.turbulence = 0.015;
-                physics.friction = 0.98;
-                appearance.colors = ['#ff4500', '#ff6600', '#ffcc00', '#ff3300'];
-                appearance.trailLength = 0.15;
-                particleType = 'fire';
-                emitterShape = 'line';
-                autoShow = false;
-
-                const id = setInterval(() => {
-                    if (particleType === 'fire' && !paused && canCreateParticles(6)) {
-                        // Fire
-                        emit(W/2, H - 30, 3, {
-                            type: 'fire',
-                            angle: -Math.PI/2,
-                            spread: 0.6,
-                            speed: 3.5,
-                            life: 1.2,
-                            size: 12
-                        });
-                        // Embers
-                        if (Math.random() < 0.3 && canCreateParticles(1)) {
-                            emit(W/2 + (Math.random() - 0.5) * 60, H - 40, 1, {
-                                type: 'spark',
-                                angle: -Math.PI/2,
-                                spread: 0.8,
-                                speed: 4,
-                                life: 2,
-                                size: 3,
-                                color: '#ff8800'
-                            });
-                        }
-                        // Smoke
-                        if (canCreateParticles(1)) {
-                            emit(W/2, H - 80, 1, {
-                                type: 'smoke',
-                                angle: -Math.PI/2,
-                                spread: 0.4,
-                                speed: 1.5,
-                                life: 4,
-                                size: 20
-                            });
-                        }
-                    }
-                }, 50);
-                presetIntervals.push(id);
-            },
-
-            waterfall: () => {
-                physics.gravity = 0.18;
-                physics.wind = 0;
-                physics.turbulence = 0.008;
-                physics.friction = 0.995;
-                appearance.colors = ['#4ecdc4', '#45b7d1', '#96e6ff', '#00d4ff'];
-                appearance.trailLength = 0.2;
-                particleType = 'water';
-                emitterShape = 'line';
-                autoShow = false;
-
-                const id = setInterval(() => {
-                    if (particleType === 'water' && !paused && canCreateParticles(6)) {
-                        emit(W/2, 30, 6, {
-                            type: 'water',
-                            angle: Math.PI/2,
-                            spread: 0.4,
-                            speed: 3,
-                            life: 3.5,
-                            size: 5
-                        });
-                        // Mist
-                        if (Math.random() < 0.15 && canCreateParticles(2)) {
-                            emit(W/2 + (Math.random() - 0.5) * 150, H - 100, 2, {
-                                type: 'smoke',
-                                angle: -Math.PI/2,
-                                spread: 1,
-                                speed: 0.5,
-                                life: 2,
-                                size: 15,
-                                color: '#aaddff'
-                            });
-                        }
-                    }
-                }, 35);
-                presetIntervals.push(id);
-            },
-
-            galaxy: () => {
-                physics.gravity = 0;
-                physics.wind = 0;
-                physics.turbulence = 0.003;
-                physics.friction = 0.998;
-                appearance.colors = ['#ffffff', '#aaaaff', '#ffaaff', '#aaffff'];
-                appearance.bloomIntensity = 0.9;
-                appearance.trailLength = 0.25;
-                particleType = 'magic';
-                autoShow = false;
-
-                // Create spiral galaxy (limited count)
-                const maxGalaxyParticles = Math.min(400, getAvailableBudget());
-                const particlesPerArm = Math.floor(maxGalaxyParticles / 3.5);
-
-                for (let arm = 0; arm < 3; arm++) {
-                    const armOffset = (Math.PI * 2 / 3) * arm;
-                    for (let i = 0; i < particlesPerArm; i++) {
-                        const angle = armOffset + (i / particlesPerArm) * Math.PI * 4;
-                        const dist = 30 + (i / particlesPerArm) * 350;
-                        const gx = W/2 + Math.cos(angle) * dist + (Math.random() - 0.5) * 30;
-                        const gy = H/2 + Math.sin(angle) * dist * 0.35 + (Math.random() - 0.5) * 20;
-                        emit(gx, gy, 1, {
-                            type: 'magic',
-                            speed: 0.3,
-                            angle: angle + Math.PI/2,
-                            spread: 0.2,
-                            life: 15 + Math.random() * 5,
-                            size: 2 + Math.random() * 3,
-                            hue: 200 + Math.random() * 80
-                        });
-                    }
-                }
-
-                // Central glow
-                const centerCount = Math.min(50, getAvailableBudget());
-                for (let i = 0; i < centerCount; i++) {
-                    const angle = Math.random() * Math.PI * 2;
-                    const dist = Math.random() * 50;
-                    emit(W/2 + Math.cos(angle) * dist, H/2 + Math.sin(angle) * dist * 0.5, 1, {
-                        type: 'magic',
-                        speed: 0.1,
-                        spread: Math.PI * 2,
-                        life: 20,
-                        size: 3 + Math.random() * 3,
-                        hue: 40 + Math.random() * 30
-                    });
-                }
-            },
-
-            aurora: () => {
-                physics.gravity = 0;
-                physics.wind = 0.015;
-                physics.turbulence = 0.025;
-                physics.friction = 0.99;
-                appearance.colors = ['#00ff88', '#00ffcc', '#0088ff', '#ff00ff', '#00ffaa'];
-                appearance.bloomIntensity = 1;
-                appearance.trailLength = 0.35;
-                particleType = 'magic';
-                autoShow = false;
-
-                const id = setInterval(() => {
-                    if (particleType === 'magic' && !paused && canCreateParticles(2)) {
-                        const ax = Math.random() * W;
-                        emit(ax, 30 + Math.random() * 50, 2, {
-                            type: 'magic',
-                            angle: Math.PI/2,
-                            spread: 0.4,
-                            speed: 0.8,
-                            life: 6,
-                            size: 25 + Math.random() * 15,
-                            hue: 100 + Math.random() * 200
-                        });
-                    }
-                }, 100);
-                presetIntervals.push(id);
-            },
-
-            rain: () => {
-                physics.gravity = 0.35;
-                physics.wind = 0.08;
-                physics.turbulence = 0;
-                physics.friction = 1;
-                appearance.colors = ['#6699cc', '#4488bb', '#3377aa', '#5588cc'];
-                appearance.trailLength = 0.4;
-                particleType = 'water';
-                autoShow = false;
-
-                const id = setInterval(() => {
-                    if (particleType === 'water' && !paused && canCreateParticles(4)) {
-                        for (let i = 0; i < 4; i++) {
-                            emit(Math.random() * W * 1.2 - W * 0.1, -10, 1, {
-                                type: 'water',
-                                angle: Math.PI/2 + 0.15,
-                                spread: 0.05,
-                                speed: 10 + Math.random() * 5,
-                                life: 1.2,
-                                size: 2,
-                                trailLength: 15
-                            });
-                        }
-                    }
-                }, 20);
-                presetIntervals.push(id);
-            },
-
-            snow: () => {
-                physics.gravity = 0.015;
-                physics.wind = 0.008;
-                physics.turbulence = 0.008;
-                physics.friction = 0.995;
-                appearance.colors = ['#ffffff', '#f0f8ff', '#e6f2ff', '#f5f5ff'];
-                appearance.trailLength = 0.05;
-                particleType = 'snow';
-                autoShow = false;
-
-                const id = setInterval(() => {
-                    if (particleType === 'snow' && !paused && canCreateParticles(2)) {
-                        emit(Math.random() * W, -20, 2, {
-                            type: 'snow',
-                            angle: Math.PI/2,
-                            spread: 0.3,
-                            speed: 1,
-                            life: 12,
-                            size: 5 + Math.random() * 6
-                        });
-                    }
-                }, 100);
-                presetIntervals.push(id);
-            },
-
-            confetti: () => {
-                physics.gravity = 0.04;
-                physics.wind = 0;
-                physics.turbulence = 0.015;
-                physics.friction = 0.99;
-                appearance.colors = ['#ff6b6b', '#ffd93d', '#4ecdc4', '#a855f7', '#3b82f6', '#22c55e', '#f97316'];
-                appearance.trailLength = 0;
-                particleType = 'confetti';
-                autoShow = false;
-
-                // Celebration burst (limited count)
-                const confettiCount = Math.min(200, getAvailableBudget());
-                for (let i = 0; i < confettiCount; i++) {
-                    setTimeout(() => {
-                        if (canCreateParticles(1)) {
-                            emit(W/2 + (Math.random() - 0.5) * 200, H/3, 1, {
-                                type: 'confetti',
-                                angle: -Math.PI/2,
-                                spread: Math.PI * 1.2,
-                                speed: 10 + Math.random() * 5,
-                                life: 6,
-                                size: 10 + Math.random() * 10
-                            });
-                        }
-                    }, i * 8);
-                }
-            },
-
-            magic: () => {
-                physics.gravity = 0;
-                physics.wind = 0;
-                physics.turbulence = 0.02;
-                physics.friction = 0.98;
-                appearance.colors = ['#ff6b6b', '#ffd93d', '#4ecdc4', '#a855f7'];
-                appearance.bloomIntensity = 1;
-                appearance.trailLength = 0.3;
-                particleType = 'magic';
-                autoShow = false;
-            },
-
-            matrix: () => {
-                physics.gravity = 0.08;
-                physics.wind = 0;
-                physics.turbulence = 0;
-                physics.friction = 1;
-                appearance.colors = ['#00ff00', '#00cc00', '#009900', '#00ff44'];
-                appearance.trailLength = 0.45;
-                particleType = 'spark';
-                autoShow = false;
-
-                const id = setInterval(() => {
-                    if (!paused && canCreateParticles(1)) {
-                        emit(Math.random() * W, -10, 1, {
-                            type: 'spark',
-                            angle: Math.PI/2,
-                            spread: 0,
-                            speed: 6 + Math.random() * 8,
-                            life: 2.5,
-                            size: 3,
-                            trailLength: 20,
-                            glow: true
-                        });
-                    }
-                }, 30);
-                presetIntervals.push(id);
-            }
-        };
-
-        function setPreset(name) {
-            clearParticles();
-            clearPresetIntervals();
-            clearRocketIntervals();
-            autoShow = false;
-            presets[name]();
-            updateUI();
-        }
-
-        // ============================================
-        // INPUT HANDLING
-        // ============================================
-
-        canvas.addEventListener('mousedown', (e) => {
-            isMouseDown = true;
-            mousePos = { x: e.clientX, y: e.clientY };
-            handleInteraction(e.clientX, e.clientY, true);
-        });
-
-        canvas.addEventListener('mousemove', (e) => {
-            mousePos = { x: e.clientX, y: e.clientY };
-            if (isMouseDown) {
-                handleInteraction(e.clientX, e.clientY, false);
-            }
-        });
-
-        canvas.addEventListener('mouseup', () => {
-            isMouseDown = false;
-        });
-
-        canvas.addEventListener('mouseleave', () => {
-            isMouseDown = false;
-        });
-
-        canvas.addEventListener('wheel', (e) => {
-            e.preventDefault();
-            appearance.size = Math.max(1, Math.min(20, appearance.size - e.deltaY * 0.01));
-            document.getElementById('particleSize').value = appearance.size;
-            document.getElementById('sizeVal').textContent = appearance.size.toFixed(1);
-        });
-
-        // Touch support
-        canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            isMouseDown = true;
-            const touch = e.touches[0];
-            mousePos = { x: touch.clientX, y: touch.clientY };
-            handleInteraction(touch.clientX, touch.clientY, true);
-        });
-
-        canvas.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            const touch = e.touches[0];
-            mousePos = { x: touch.clientX, y: touch.clientY };
-            if (isMouseDown) {
-                handleInteraction(touch.clientX, touch.clientY, false);
-            }
-        });
-
-        canvas.addEventListener('touchend', () => {
-            isMouseDown = false;
-        });
-
-        document.addEventListener('keydown', (e) => {
-            if (e.code === 'Space') {
-                e.preventDefault();
-                const patterns = ['peony', 'chrysanthemum', 'willow', 'palm', 'ring', 'heart', 'star', 'spiral', 'crossette', 'kamuro'];
-                launchFirework(patterns[Math.floor(Math.random() * patterns.length)]);
-            }
-            // Number keys for specific patterns
-            const patternKeys = {
-                'Digit1': 'peony',
-                'Digit2': 'chrysanthemum',
-                'Digit3': 'willow',
-                'Digit4': 'palm',
-                'Digit5': 'ring',
-                'Digit6': 'heart',
-                'Digit7': 'star',
-                'Digit8': 'spiral'
-            };
-            if (patternKeys[e.code]) {
-                launchFirework(patternKeys[e.code]);
-            }
-        });
-
-        function handleInteraction(x, y, isClick) {
-            switch (interactionMode) {
-                case 'emit':
-                    const count = isClick ? 15 : 4;
-                    if (canCreateParticles(count)) {
-                        emit(x, y, count, {
-                            speed: 4,
-                            spread: Math.PI * 0.6,
-                            angle: -Math.PI / 2,
-                            life: 1.5
-                        });
-                    }
-                    break;
-                case 'attract':
-                case 'repel':
-                    // Handled in update loop
-                    break;
-                case 'paint':
-                    if (canCreateParticles(6)) {
-                        emit(x, y, 6, {
-                            speed: 0.8,
-                            spread: Math.PI * 2,
-                            life: 3,
-                            size: appearance.size * 1.5
-                        });
-                    }
-                    break;
-            }
-        }
-
-        // ============================================
-        // MAIN UPDATE & RENDER LOOP
-        // ============================================
-
-        function update(timestamp) {
-            // Handle first frame (lastTime will be 0)
-            if (lastTime === 0) {
-                lastTime = timestamp;
-            }
-
-            const dt = Math.min((timestamp - lastTime) / 16.67, 3);
-            lastTime = timestamp;
-
-            if (!paused) {
-                // Update particles and remove dead ones
-                for (let i = activeParticles.length - 1; i >= 0; i--) {
-                    const p = activeParticles[i];
-
-                    // Check for rocket explosion
-                    if (p.isRocket && p.y <= p.explodeY) {
-                        explodeFirework(p.x, p.y, p.pattern);
-                        p.active = false;
-                    }
-
-                    // Apply attraction/repulsion
-                    if (isMouseDown && (interactionMode === 'attract' || interactionMode === 'repel')) {
-                        const dx = mousePos.x - p.x;
-                        const dy = mousePos.y - p.y;
-                        const distSq = dx * dx + dy * dy;
-                        if (distSq < 40000 && distSq > 1) {
-                            const dist = Math.sqrt(distSq);
-                            const force = interactionMode === 'attract' ? 0.6 : -1;
-                            const strength = force * (1 - dist / 200);
-                            p.vx += (dx / dist) * strength;
-                            p.vy += (dy / dist) * strength;
-                        }
-                    }
-
-                    // Audio reactive
-                    if (audioEnabled && audioData) {
-                        const bass = audioData.slice(0, 10).reduce((a, b) => a + b, 0) / 10;
-                        const treble = audioData.slice(50, 80).reduce((a, b) => a + b, 0) / 30;
-                        p.size = p.baseSize * (1 + bass / 200);
-                        if (bass > 160) {
-                            p.vx += (Math.random() - 0.5) * 2;
-                            p.vy += (Math.random() - 0.5) * 2;
-                        }
-                        p.hue += treble / 100;
-                    }
-
-                    p.update(dt);
-
-                    // Remove dead particles and return to pool
-                    if (!p.active) {
-                        activeParticles.splice(i, 1);
-                        returnParticle(p);
-                    }
-                }
-
-                // Auto firework show (with throttling)
-                if (autoShow && !isThrottled() && Math.random() < 0.02) {
-                    const patterns = ['peony', 'chrysanthemum', 'willow', 'palm', 'ring', 'heart', 'star', 'spiral', 'crossette', 'kamuro'];
-                    launchFirework(patterns[Math.floor(Math.random() * patterns.length)]);
-                }
-            }
-
-            // Periodic cleanup check
-            if (timestamp - lastCleanupTime > CLEANUP_INTERVAL) {
-                lastCleanupTime = timestamp;
-                // Force cleanup of any orphaned intervals
-                rocketIntervals = rocketIntervals.filter(id => {
-                    // Keep only active intervals
-                    return true; // Intervals auto-remove themselves
-                });
-            }
-
-            // FPS calculation
-            frameCount++;
-            if (timestamp - fpsUpdateTime > 500) {
-                fps = Math.round(frameCount * 2);
-                frameCount = 0;
-                fpsUpdateTime = timestamp;
-            }
-
-            // Update stats display
-            const countEl = document.getElementById('particleCount');
-            const count = activeParticles.length;
-            countEl.textContent = count;
-
-            // Color code particle count
-            countEl.className = 'stat-value';
-            if (count > BUDGET_THRESHOLD) {
-                countEl.classList.add('stat-warning');
-            }
-            if (count > MAX_ACTIVE_PARTICLES * 0.9) {
-                countEl.classList.add('stat-danger');
-            }
-
-            document.getElementById('fps').textContent = fps;
-            document.getElementById('maxParticles').textContent = MAX_ACTIVE_PARTICLES;
-            document.getElementById('poolFree').textContent = freeList.length;
-
-            // Memory status indicator
-            const memEl = document.getElementById('memoryUsage');
-            if (freeList.length < 100) {
-                memEl.textContent = 'low';
-                memEl.className = 'stat-value stat-warning';
-            } else if (freeList.length < 500) {
-                memEl.textContent = 'moderate';
-                memEl.className = 'stat-value';
-            } else {
-                memEl.textContent = 'stable';
-                memEl.className = 'stat-value';
-            }
-        }
-
-        function render() {
-            // Clear with trail effect
-            ctx.fillStyle = `rgba(0, 0, 0, ${1 - appearance.trailLength})`;
-            ctx.fillRect(0, 0, W, H);
-
-            // Draw particles (sorted by type for batching)
-            for (let i = 0; i < activeParticles.length; i++) {
-                activeParticles[i].draw(ctx);
-            }
-
-            // Bloom effect
-            if (appearance.bloomIntensity > 0) {
-                bloomCtx.clearRect(0, 0, W, H);
-                bloomCtx.filter = `blur(${12 * appearance.bloomIntensity}px)`;
-                bloomCtx.globalAlpha = appearance.bloomIntensity * 0.6;
-                bloomCtx.drawImage(canvas, 0, 0);
-                bloomCtx.filter = 'none';
-                bloomCtx.globalAlpha = 1;
-            }
-        }
-
-        function loop(timestamp) {
-            update(timestamp);
-            render();
-            requestAnimationFrame(loop);
-        }
-
-        // ============================================
-        // UI FUNCTIONS
-        // ============================================
-
-        function toggleControls() {
-            document.getElementById('controls').classList.toggle('collapsed');
-        }
-
-        function setParticleType(type) {
-            particleType = type;
-            document.querySelectorAll('[id^="type-"]').forEach(btn => btn.classList.remove('active'));
-            const btn = document.getElementById(`type-${type}`);
-            if (btn) btn.classList.add('active');
-        }
-
-        function setEmitter(shape) {
-            emitterShape = shape;
-            document.querySelectorAll('[id^="emit-"]').forEach(btn => btn.classList.remove('active'));
-            const btn = document.getElementById(`emit-${shape}`);
-            if (btn) btn.classList.add('active');
-        }
-
-        function setMode(mode) {
-            interactionMode = mode;
-            document.querySelectorAll('[id^="mode-"]').forEach(btn => btn.classList.remove('active'));
-            const btn = document.getElementById(`mode-${mode}`);
-            if (btn) btn.classList.add('active');
-        }
-
-        function updatePhysics() {
-            physics.gravity = parseFloat(document.getElementById('gravity').value);
-            physics.wind = parseFloat(document.getElementById('wind').value);
-            physics.turbulence = parseFloat(document.getElementById('turbulence').value);
-            physics.friction = parseFloat(document.getElementById('friction').value);
-
-            document.getElementById('gravityVal').textContent = physics.gravity.toFixed(2);
-            document.getElementById('windVal').textContent = physics.wind.toFixed(2);
-            document.getElementById('turbVal').textContent = physics.turbulence.toFixed(3);
-            document.getElementById('frictionVal').textContent = physics.friction.toFixed(3);
-        }
-
-        function updateAppearance() {
-            appearance.size = parseFloat(document.getElementById('particleSize').value);
-            appearance.trailLength = parseFloat(document.getElementById('trailLength').value);
-            appearance.bloomIntensity = parseFloat(document.getElementById('bloomIntensity').value);
-
-            document.getElementById('sizeVal').textContent = appearance.size.toFixed(1);
-            document.getElementById('trailVal').textContent = appearance.trailLength.toFixed(2);
-            document.getElementById('bloomVal').textContent = appearance.bloomIntensity.toFixed(2);
-        }
-
-        function updateColors() {
-            appearance.colors = [
-                document.getElementById('color1').value,
-                document.getElementById('color2').value,
-                document.getElementById('color3').value
-            ];
-        }
-
-        function updateUI() {
-            document.getElementById('gravity').value = physics.gravity;
-            document.getElementById('wind').value = physics.wind;
-            document.getElementById('turbulence').value = physics.turbulence;
-            document.getElementById('friction').value = physics.friction;
-            document.getElementById('particleSize').value = appearance.size;
-            document.getElementById('trailLength').value = appearance.trailLength;
-            document.getElementById('bloomIntensity').value = appearance.bloomIntensity;
-
-            updatePhysics();
-            updateAppearance();
-        }
-
-        function clearParticles() {
-            // Return all particles to pool
-            for (let i = activeParticles.length - 1; i >= 0; i--) {
-                returnParticle(activeParticles[i]);
-            }
-            activeParticles.length = 0;
-
-            // Clear all intervals
-            clearRocketIntervals();
-        }
-
-        function togglePause() {
-            paused = !paused;
-            document.getElementById('pauseBtn').textContent = paused ? 'Resume' : 'Pause';
-        }
-
-        function fireworkShow() {
-            autoShow = !autoShow;
-        }
-
-        // ============================================
-        // AUDIO REACTIVE
-        // ============================================
-
-        async function toggleAudio() {
-            if (!audioEnabled) {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    const audioContext = new AudioContext();
-                    const source = audioContext.createMediaStreamSource(stream);
-                    audioAnalyser = audioContext.createAnalyser();
-                    audioAnalyser.fftSize = 256;
-                    source.connect(audioAnalyser);
-                    audioData = new Uint8Array(audioAnalyser.frequencyBinCount);
-
-                    // Create visualizer bars
-                    const visualizer = document.getElementById('audioVisualizer');
-                    visualizer.innerHTML = '';
-                    visualizer.style.display = 'flex';
-                    for (let i = 0; i < 32; i++) {
-                        const bar = document.createElement('div');
-                        bar.className = 'audio-bar';
-                        visualizer.appendChild(bar);
-                    }
-
-                    audioEnabled = true;
-                    document.getElementById('audioBtn').textContent = 'Disable Microphone';
-
-                    // Update visualizer
-                    function updateVisualizer() {
-                        if (audioEnabled && audioAnalyser) {
-                            audioAnalyser.getByteFrequencyData(audioData);
-                            const bars = visualizer.querySelectorAll('.audio-bar');
-                            for (let i = 0; i < bars.length; i++) {
-                                const value = audioData[i * 4];
-                                bars[i].style.transform = `scaleY(${0.1 + value / 280})`;
-                            }
-                            requestAnimationFrame(updateVisualizer);
-                        }
-                    }
-                    updateVisualizer();
-
-                } catch (e) {
-                    console.error('Microphone access denied:', e);
-                    alert('Microphone access was denied. Audio reactive mode requires microphone permission.');
-                }
-            } else {
-                audioEnabled = false;
-                document.getElementById('audioBtn').textContent = 'Enable Microphone';
-                document.getElementById('audioVisualizer').style.display = 'none';
-            }
-        }
-
-        // ============================================
-        // RECORDING
-        // ============================================
-
-        let mediaRecorder = null;
-        let recordedChunks = [];
-
-        function toggleRecording() {
-            if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-                const stream = canvas.captureStream(30);
-                mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
-                recordedChunks = [];
-
-                mediaRecorder.ondataavailable = (e) => {
-                    if (e.data.size > 0) {
-                        recordedChunks.push(e.data);
-                    }
-                };
-
-                mediaRecorder.start(100);
-                document.getElementById('recordBtn').textContent = 'Stop Recording';
-                document.getElementById('recordingIndicator').style.display = 'block';
-            } else {
-                mediaRecorder.stop();
-                document.getElementById('recordBtn').textContent = 'Start Recording';
-                document.getElementById('recordingIndicator').style.display = 'none';
-            }
-        }
-
-        function downloadRecording() {
-            if (recordedChunks.length === 0) {
-                alert('No recording available. Start recording first!');
-                return;
-            }
-
-            const blob = new Blob(recordedChunks, { type: 'video/webm' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `particle-fireworks-${Date.now()}.webm`;
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-
-        // ============================================
-        // INITIALIZATION
-        // ============================================
-
-        // Initialize UI state
-        setParticleType('spark');
-        setEmitter('point');
-        setMode('emit');
-
-        // Create some immediate visible particles on load
-        function createInitialParticles() {
-            // Emit a burst of particles in the center
-            const initialCount = Math.min(40, getAvailableBudget());
-            for (let i = 0; i < initialCount; i++) {
-                emit(W / 2, H / 2, 1, {
-                    type: 'spark',
-                    speed: 3 + Math.random() * 4,
-                    spread: Math.PI * 2,
-                    life: 1.5 + Math.random(),
-                    size: 4 + Math.random() * 3,
-                    glow: true
-                });
-            }
-        }
-
-        // Call immediately to show particles right away
-        createInitialParticles();
-
-        // Start with a modest firework show after a short delay
-        setTimeout(() => {
-            const patterns = ['peony', 'chrysanthemum', 'heart'];
-            patterns.forEach((pattern, i) => {
-                setTimeout(() => launchFirework(pattern), i * 800);
-            });
-        }, 300);
-
-        // Start the animation loop
+        // Update UI
+        const countEl = document.getElementById('count');
+        countEl.textContent = particles.length;
+        countEl.className = 'stat-value';
+        if (particles.length > MAX_PARTICLES * 0.7) countEl.classList.add('warn');
+        if (particles.length > MAX_PARTICLES * 0.9) countEl.classList.add('danger');
+        document.getElementById('fps').textContent = fps;
+    }
+
+    function render() {
+        // Trail effect
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.globalAlpha = 1;
+
+        // Draw rockets
+        for (const r of rockets) r.draw();
+
+        // Draw particles
+        for (const p of particles) p.draw();
+
+        ctx.globalAlpha = 1;
+    }
+
+    function loop(timestamp) {
+        update(timestamp);
+        render();
         requestAnimationFrame(loop);
+    }
+
+    // Controls
+    function setPattern(p) {
+        pattern = p;
+        document.querySelectorAll('.buttons button').forEach(b => b.classList.remove('active'));
+        event.target.classList.add('active');
+    }
+
+    function toggleAuto() {
+        autoMode = !autoMode;
+        document.getElementById('autoBtn').textContent = `Auto: ${autoMode ? 'ON' : 'OFF'}`;
+    }
+
+    function clearAll() {
+        particles = [];
+        rockets = [];
+    }
+
+    // Click to launch
+    canvas.addEventListener('click', (e) => {
+        launch(e.clientX, e.clientY);
+    });
+
+    // Start with a few fireworks
+    setTimeout(() => { launch(); launch(); }, 100);
+
+    requestAnimationFrame(loop);
     </script>
 </body>
 </html>
